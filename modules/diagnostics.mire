@@ -1,0 +1,33 @@
+import std
+
+pub fn info_header: (tag :str title :str src :str) {
+    use dasu("info[" + tag + "] ── " + title)
+    use dasu("╭─[ " + src + " ]")
+}
+
+pub fn info_section: (name :str) {
+    use dasu("├─┤ " + name)
+    use dasu("│")
+}
+
+pub fn info_kv: (key :str value :str) {
+    set pad = key :str mut
+    if len(key) < 12 {
+        if len(key) <= 3 { set pad = key + "         " }
+        if len(key) > 3 && len(key) <= 6 { set pad = key + "      " }
+        if len(key) > 6 && len(key) <= 9 { set pad = key + "   " }
+    }
+    use dasu("│ " + pad + " : " + value)
+}
+
+pub fn info_footer: (msg :str) {
+    use dasu("╰─ " + msg)
+}
+
+pub fn warn_line: (tag :str msg :str) {
+    use dasu("warning[" + tag + "] " + msg)
+}
+
+pub fn error_line: (tag :str msg :str) {
+    use dasu("error[" + tag + "] " + msg)
+}

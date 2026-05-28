@@ -1,0 +1,58 @@
+pub fn mkdir_p: (path :str) {
+    set parts = strings::split(path "/")
+    set n = len(parts)
+    set built = "" :str mut
+    if strings::starts_with(path "/") {
+        set built = "/"
+    }
+    set i = 0 :i64 mut
+
+    while i < n {
+        set part = lists::get(parts i)
+        if part != "" {
+            if built == "" {
+                set built = part
+            } else {
+                if built == "/" {
+                    set built = "/" + part
+                } else {
+                    set built = built + "/" + part
+                }
+            }
+            if !fs_exists(built) {
+                use fs_mkdir(built)
+            }
+        }
+        set i += 1
+    }
+}
+
+pub fn rm_RF: (path :str) {
+    set exists = fs_exists(path)
+    if !exists {
+        return
+    }
+
+    set is_dir = fs_is_dir(path)
+    if is_dir {
+        set entries = fs_list(path)
+        set n = len(entries)
+        set i = 0 :i64 mut
+
+        while i < n {
+            set entry = lists::get(entries i)
+            set is_dot = entry == "."
+            set is_dotdot = entry == ".."
+            if !is_dot {
+                if !is_dotdot {
+                    set child_path = path + "/" + entry
+                    use rm_RF(child_path)
+                }
+            }
+            set i += 1
+        }
+        use fs_rmdir(path)
+    } else {
+        use fs_drop(path)
+    }
+}
