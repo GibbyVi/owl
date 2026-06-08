@@ -1,5 +1,5 @@
-import std
-import ./tests/test_utils
+load kioto
+load ./tests/test_utils
 
 ![test] basic equality
 pub fn test_basic_eq: () :bool {

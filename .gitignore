@@ -23,6 +23,7 @@ Thumbs.db
 *.bak
 *.backup
 *.step.test
+*.full
 
 # Generated test harness
 _test_harness.mire

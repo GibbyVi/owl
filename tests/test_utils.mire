@@ -1,4 +1,4 @@
-import std
+load kioto
 
 pub fn assert: (cond :bool) :bool {
     return cond
