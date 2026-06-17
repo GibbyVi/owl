@@ -1,0 +1,14 @@
+load kioto
+load testlib
+
+pub fn main: () {
+    use dasu("verify: testing testlib assertions...")
+    testlib::assert_eq(1 1)
+    testlib::assert_ne(1 2)
+    testlib::assert_true(true)
+    testlib::assert_false(false)
+    testlib::assert_lt(1 2)
+    testlib::assert_gt(2 1)
+    testlib::assert_eq_str("hello" "hello")
+    use dasu("verify: all assertion helpers work")
+}

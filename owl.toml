@@ -1,7 +1,7 @@
 [project]
 name = "owl"
-version = "0.13.1"
+version = "0.13.2"
 entry = "code/main.mire"
 
-[dependencies]
-dasu = "latest"
+[dependencies.testlib]
+path = "./tests/lib"

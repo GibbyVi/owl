@@ -1,0 +1,64 @@
+load kioto
+load testlib
+
+pub fn main: () {
+    use dasu("--- primitives ---")
+
+    set a = 42 :i64
+    testlib::assert_eq(42 a)
+    use dasu("  i64 literal: ok")
+
+    set b = -17 :i64
+    testlib::assert_eq(-17 b)
+    use dasu("  negative i64: ok")
+
+    set sum = 100 + 200 :i64
+    testlib::assert_eq(300 sum)
+    use dasu("  i64 addition: ok")
+
+    set diff = 200 - 50 :i64
+    testlib::assert_eq(150 diff)
+    use dasu("  i64 subtraction: ok")
+
+    set product = 12 * 12 :i64
+    testlib::assert_eq(144 product)
+    use dasu("  i64 multiplication: ok")
+
+    set quot = 100 / 7 :i64
+    testlib::assert_eq(14 quot)
+    use dasu("  i64 division: ok")
+
+    set rem = 100 % 7 :i64
+    testlib::assert_eq(2 rem)
+    use dasu("  i64 modulo: ok")
+
+    set big = 2147483647 :i64
+    set big2 = big + 1
+    testlib::assert_eq(2147483648 big2)
+    use dasu("  i64 near 32-bit boundary: ok")
+
+    set zero = 0 :i64
+    testlib::assert_true(42 > 0)
+    testlib::assert_true(-1 < 0)
+    testlib::assert_true(5 >= 5)
+    testlib::assert_true(5 <= 5)
+    testlib::assert_true(3 != 4)
+    testlib::assert_true(3 == 3)
+    use dasu("  i64 comparisons: ok")
+
+    testlib::assert_true(true && true)
+    testlib::assert_false(false && true)
+    testlib::assert_true(true || false)
+    testlib::assert_false(false || false)
+    testlib::assert_false(!true)
+    testlib::assert_true(!false)
+    use dasu("  boolean logic: ok")
+
+    set count = 10 :i64 mut
+    set count = count + 1
+    set count = count * 2
+    testlib::assert_eq(22 count)
+    use dasu("  mutable i64 operations: ok")
+
+    use dasu("all primitive tests passed")
+}

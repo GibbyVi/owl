@@ -1,0 +1,78 @@
+load kioto
+load testlib
+
+fn run_all: () {
+    use dasu("--- control flow ---")
+
+    if true {
+        use dasu("  if true: ok")
+    } else {
+        testlib::assert(false)
+    }
+
+    if false {
+        testlib::assert(false)
+    } else {
+        use dasu("  if false else: ok")
+    }
+
+    set x = 42 :i64
+    if x > 40 {
+        use dasu("  if with condition: ok")
+    }
+
+    set count = 0 :i64 mut
+    while count < 5 {
+        set count = count + 1
+    }
+    testlib::assert_eq(5 count)
+    use dasu("  while loop 0-5: ok")
+
+    set sum = 0 :i64 mut
+    set i = 1 :i64 mut
+    while i <= 10 {
+        set sum = sum + i
+        set i = i + 1
+    }
+    testlib::assert_eq(55 sum)
+    use dasu("  while loop 1+...+10: ok")
+
+    set factorial = 1 :i64 mut
+    set j = 5 :i64 mut
+    while j > 1 {
+        set factorial = factorial * j
+        set j = j - 1
+    }
+    testlib::assert_eq(120 factorial)
+    use dasu("  while loop factorial 5: ok")
+
+    set nested = 0 :i64 mut
+    set a = 0 :i64 mut
+    while a < 3 {
+        set b = 0 :i64 mut
+        while b < 4 {
+            set nested = nested + 1
+            set b = b + 1
+        }
+        set a = a + 1
+    }
+    testlib::assert_eq(12 nested)
+    use dasu("  nested while loops: ok")
+
+    set val = 50 :i64
+    if val > 100 {
+        testlib::assert(false)
+    } else {
+        if val > 20 {
+            use dasu("  else if branch: ok")
+        } else {
+            testlib::assert(false)
+        }
+    }
+
+    use dasu("all control flow tests passed")
+}
+
+pub fn main: () {
+    run_all()
+}

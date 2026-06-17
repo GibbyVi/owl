@@ -64,7 +64,11 @@ pub fn toml_get: (file :str section :str key :str) :str {
                                 set j += 1
                             }
                             set trimmed_val = strings::trim(full_val)
-                            return strings::replace(trimmed_val "\"" "")
+                            if strings::starts_with(trimmed_val "\"") && strings::ends_with(trimmed_val "\"") {
+                                set inner = strings::substr(trimmed_val 1 len(trimmed_val) - 2)
+                                return inner
+                            }
+                            return trimmed_val
                         }
                     }
                 }
@@ -163,14 +167,14 @@ pub fn profile_show: (_as_json :bool _show_history :bool _compare :bool) {
         use dasu("{\"status\":\"ok\",\"show_history\":" + str(_show_history) + ",\"compare\":" + str(_compare) + "}")
         return
     }
-    use dasu("profile[OWL] ── Build Profile")
+    use dasu("profile[OWL] -- Build Profile")
     if _show_history {
         use dasu("  history: enabled")
     }
     if _compare {
         use dasu("  compare: enabled")
     }
-    use dasu("╰─ profile complete")
+    use dasu("+ profile complete")
 }
 
 fn extract_fn_name: (line :str) :str {
@@ -197,19 +201,35 @@ fn scan_file: (path :str) :str {
     set i = 0 :i64 mut
     while i < n {
         set line = strings::trim(lists::get(mylines i))
-        if strings::starts_with(line "![test") {
+        if strings::starts_with(line "#!cfg::") || strings::starts_with(line "![") {
+            set directive = "" :str mut
             set desc = "" :str mut
-            set after_bracket = strings::replace_first(line "![test]" "")
-            set after_trim = strings::trim(after_bracket)
-            if after_trim != "" {
-                set desc = after_trim
+            if strings::starts_with(line "#!cfg::") {
+                set rest = strings::replace_first(line "#!cfg::" "")
+                set space_pos = strings::index_of(rest " ")
+                if space_pos > 0 {
+                    set directive = strings::substr(rest 0 space_pos)
+                    set desc = strings::trim(strings::substr(rest space_pos len(rest) - space_pos))
+                } else {
+                    set directive = rest
+                }
+            } else {
+                set rest = strings::replace_first(line "![" "")
+                set close_pos = strings::index_of(rest "]")
+                if close_pos >= 0 {
+                    set directive = strings::substr(rest 0 close_pos)
+                    set after = strings::trim(strings::substr(rest close_pos + 1 len(rest) - close_pos - 1))
+                    if after != "" {
+                        set desc = after
+                    }
+                }
             }
             set j = i + 1
             if j < n {
                 set next = strings::trim(lists::get(mylines j))
                 set func = extract_fn_name(next)
                 if func != "" {
-                    set result = result + path + "|" + func + "|" + desc + "\n---\n"
+                    set result = result + path + "|" + directive + "|" + func + "|" + desc + "\n---\n"
                 }
             }
         }
@@ -258,7 +278,9 @@ fn generate_harness: (data :str filter :str) :str {
     set load_lines = [""] :vec[str] mut
     set last_load = "" :str mut
     set body = "" :str mut
+    set failures = "" :str mut
     set count = 0 :i64 mut
+    set filtered = 0 :i64 mut
     set i = 0 :i64 mut
     while i < n {
         set rec = strings::trim(lists::get(records i))
@@ -268,28 +290,30 @@ fn generate_harness: (data :str filter :str) :str {
             set f0 = "" :str mut
             set f1 = "" :str mut
             set f2 = "" :str mut
+            set f3 = "" :str mut
             set ki = 0 :i64 mut
             while ki < m {
                 set fv = strings::trim(lists::get(fields ki))
                 if ki == 0 { set f0 = fv }
                 if ki == 1 { set f1 = fv }
                 if ki == 2 { set f2 = fv }
+                if ki == 3 { set f3 = fv }
                 set ki += 1
             }
-            if f1 != "" {
+            if f1 == "test" && f2 != "" {
                 set f0_copy = lists::get(strings::split(f0 "\n") 0)
-                set f1_raw = lists::get(strings::split(f1 "\n") 0)
-                set f2_copy = lists::get(strings::split(f2 "\n") 0)
                 set imp_src = lists::get(strings::split(f0_copy ".") 0)
                 set imp_path = "./" + imp_src
-                set desc = lists::get(strings::split(f1 "\n") 0) :str mut
-                if f2_copy != "" { set desc = f2_copy }
-                set call_fn = lists::get(strings::split(f1_raw "\n") 0)
+                set desc = f3 :str mut
+                set call_fn = f2
                 set call_line = "    set ok = " + call_fn + "()\n"
                 set skip = false :bool mut
                 if filter != "" {
                     set parts = strings::split(call_fn + " " + desc filter)
-                    if len(parts) <= 1 { set skip = true }
+                    if len(parts) <= 1 {
+                        set skip = true
+                        set filtered = filtered + 1
+                    }
                 }
                 if !skip {
                     set load_line = "load " + imp_path
@@ -297,14 +321,15 @@ fn generate_harness: (data :str filter :str) :str {
                     set load_lines = lists::push(load_lines "load " + imp_path)
                     set last_load = load_line
                 }
-                    set body = body + "    use dasu(\"running test\")\n"
+                    set body = body + "    use dasu(\"test \" + \"" + call_fn + "\" + \" ...\")\n"
                     set body = body + call_line
                     set body = body + "    if ok {\n"
                     set body = body + "        set passed = passed + 1\n"
                     set body = body + "        use dasu(\"ok\")\n"
                     set body = body + "    } else {\n"
                     set body = body + "        set failed = failed + 1\n"
-                    set body = body + "        use dasu(\"FAIL\")\n"
+                    set body = body + "        set failures = failures + \"" + call_fn + "\\n\"\n"
+                    set body = body + "        use dasu(\"FAILED\")\n"
                     set body = body + "    }\n"
                     set count = count + 1
                 }
@@ -314,7 +339,14 @@ fn generate_harness: (data :str filter :str) :str {
     }
     if count == 0 { return "" }
     set loads = strings::join(load_lines "\n") + "\n"
-    return "load kioto\n" + loads + "pub fn main: () {\n    set ok = false :bool mut\n    set passed = 0 :i64 mut\n    set failed = 0 :i64 mut\n" + body + "    use dasu(\"\")\n    if failed > 0 {\n        use dasu(\"Some tests failed.\")\n    } else {\n        use dasu(\"All tests passed.\")\n    }\n}\n"
+    set count_str = rt_i64_to_string(count) :str
+    set filtered_str = rt_i64_to_string(filtered) :str
+    set header = "load kioto\n" + loads :str mut
+    set header = header + "extern fn rt_i64_to_string: (value :i64) :str lib \"c\"\n"
+    set header = header + "pub fn main: () {\n    set ok = false :bool mut\n    set passed = 0 :i64 mut\n    set failed = 0 :i64 mut\n    set failures = \"\" :str mut\n    use dasu(\"running \" + " + count_str + " + \" test(s)\")\n"
+    set footer = "    use dasu(\"\")\n    if failures != \"\" {\n        use dasu(\"failures:\")\n        set f_lines = strings::split(failures \"\\n\")\n        set fi = 0 :i64 mut\n        while fi < len(f_lines) {\n            set fname = strings::trim(lists::get(f_lines fi))\n            if fname != \"\" {\n                use dasu(\"    \" + fname)\n            }\n            set fi += 1\n        }\n        use dasu(\"\")\n    }\n    use dasu(\"test result: \" + rt_i64_to_string(passed) + \" passed; \" + rt_i64_to_string(failed) + \" failed; \" + " + filtered_str + " + \" filtered\")\n" :str mut
+    set footer = footer + "}\n"
+    return header + body + footer
 }
 
 fn drop_harness: () {
@@ -373,16 +405,295 @@ pub fn run_tests: (filter :str compiler_cmd :str) {
 extern fn rt_vec_get_str: (list :&vec[str], index :i64) :str lib "c"
 extern fn rt_vec_len: (list :&vec[str]) :i64 lib "c"
 extern fn rt_string_to_i64: (value :str) :i64 lib "c"
+extern fn rt_i64_to_string: (value :i64) :str lib "c"
 
-fn owl_version: () :str { return "0.13.1" }
-fn compiler_version: () :str { return "Avenys 3.8.x" }
+fn owl_version: () :str { return "0.14.0" }
+fn compiler_version: () :str {
+    set v = strings::trim(proc_run("mire --version"))
+    if v != "" { return v }
+    return "Avenys (unknown)"
+}
 
 fn has_project: () :bool {
     return fs_exists("owl.toml")
 }
 
+fn owl_home_dir: () :str {
+    set h = env_get("HOME")
+    if h != "" { return h }
+    return "/home/owl"
+}
+
+fn owl_root: () :str {
+    return owl_home_dir() + "/.owl"
+}
+
 fn ensure_owl_home: () {
-    use proc_run("mkdir -p ~/.owl/modules && [ -f ~/.owl/config.toml ] || printf '[owl]\\nversion = \"0.1.0\"\\n\\n[paths]\\nmodules = \"modules\"\\n' > ~/.owl/config.toml")
+    set root = owl_root()
+    use proc_run("mkdir -p " + root + "/modules && mkdir -p " + root + "/registry && mkdir -p " + root + "/store && mkdir -p " + root + "/tmp")
+    if !fs_exists(root + "/config.toml") {
+        use fs_write(root + "/config.toml" "[owl]\nversion = \"0.1.0\"\n\n[build]\ncurrent = \"B1.001\"\n\n[paths]\nmodules = \"modules\"\n")
+    }
+}
+
+fn registry_dir: () :str { return owl_root() + "/registry" }
+fn store_dir: () :str { return owl_root() + "/store" }
+fn sync_tmp_dir: () :str { return owl_root() + "/tmp" }
+
+fn current_build: () :str {
+    set root = owl_root()
+    if fs_exists(root + "/config.toml") {
+        set b = toml_get(root + "/config.toml" "build" "current")
+        if b != "" { return b }
+    }
+    return "B1.001"
+}
+
+fn registry_file: (pkg :str) :str {
+    return owl_root() + "/registry/" + pkg + ".toml"
+}
+
+fn store_pkg_dir: (pkg :str) :str {
+    return owl_root() + "/store/" + pkg + "/" + current_build()
+}
+
+fn registry_read: (pkg :str field :str) :str {
+    set f = registry_file(pkg)
+    if !fs_exists(f) { return "" }
+    return toml_get(f "registry" field)
+}
+
+fn registry_write: (pkg :str source_url :str source_path :str sha256 :str sha512 :str installed_build :str last_commit :str) {
+    set p = pkg
+    set content = "[registry]\nname = \"" + pkg + "\"\nsource_url = \"" + source_url + "\"\nsource_path = \"" + source_path + "\"\nsha256 = \"" + sha256 + "\"\nsha512 = \"" + sha512 + "\"\ninstalled_build = \"" + installed_build + "\"\nlast_commit = \"" + last_commit + "\"\n"
+    use fs_write(registry_file(p) content)
+}
+
+fn registry_delete: (pkg :str) {
+    set f = registry_file(pkg)
+    if fs_exists(f) { use fs_drop(f) }
+}
+
+fn registry_list: () :str {
+    set dir = registry_dir()
+    if !fs_exists(dir) { return "" }
+    set entries = fs_list(dir)
+    set n = rt_vec_len(entries)
+    set result = "" :str mut
+    set i = 0 :i64 mut
+    while i < n {
+        set e = rt_vec_get_str(entries i)
+        if e != "." && e != ".." && strings::ends_with(e ".toml") {
+            set pkg = strings::replace(e ".toml" "")
+            if result == "" {
+                set result = pkg
+            } else {
+                set result = result + "\n" + pkg
+            }
+        }
+        set i += 1
+    }
+    return result
+}
+
+fn list_subdirs: (dir :str) :str {
+    if !fs_exists(dir) { return "" }
+    set entries = fs_list(dir)
+    set n = rt_vec_len(entries)
+    set result = "" :str mut
+    set i = 0 :i64 mut
+    while i < n {
+        set e = strings::trim(rt_vec_get_str(entries i))
+        if e != "." && e != ".." {
+            set full = dir + "/" + e
+            if fs_is_dir(full) {
+                if result == "" {
+                    set result = e
+                } else {
+                    set result = result + "\n" + e
+                }
+            }
+        }
+        set i += 1
+    }
+    return result
+}
+
+fn compute_tree_sha256: (dir :str) :str {
+    set hash = strings::trim(proc_run("cd " + dir + " && find . -type f | sort | xargs sha256sum | sha256sum"))
+    set parts = strings::split(hash " ")
+    return strings::trim(rt_vec_get_str(parts 0))
+}
+
+fn validate_owl_toml: (owl_toml_path :str) :str {
+    if !fs_exists(owl_toml_path) { return "owl.toml not found" }
+    set path_a = owl_toml_path
+    set pkg_name = toml_get(path_a "project" "name")
+    if pkg_name == "" { return "missing [project].name" }
+    set path_b = owl_toml_path
+    set pkg_version = toml_get(path_b "project" "version")
+    if pkg_version == "" { return "missing [project].version" }
+    set path_c = owl_toml_path
+    set exports_list = toml_keys(path_c "exports")
+    if exports_list == "" { return "missing [exports] section - security gate rejected" }
+    return ""
+}
+
+fn validate_export_paths: (pkg_dir :str owl_toml_path :str) :str {
+    set otp = owl_toml_path
+    set exports = toml_keys(otp "exports")
+    if exports == "" { return "" }
+    set lines = strings::split(exports "\n")
+    set n = rt_vec_len(lines)
+    set err_acc = "" :str mut
+    set i = 0 :i64 mut
+    while i < n {
+        set key = strings::trim(rt_vec_get_str(lines i))
+        if key != "" {
+            set otp2 = owl_toml_path
+            set k = key
+            set v = toml_get(otp2 "exports" k)
+            set pd = pkg_dir
+            set full_file = pd + "/" + v + ".mire"
+            set pd2 = pkg_dir
+            set dir_mod = pd2 + "/" + v + "/mod.mire"
+            if !fs_exists(full_file) && !fs_exists(dir_mod) {
+                set ei = err_acc
+                set k2 = key
+                set v2 = v
+                set err_acc = ei + "export '" + k2 + "' -> '" + v2 + "' not found\n"
+            }
+        }
+        set i += 1
+    }
+    return err_acc
+}
+
+fn find_package_dirs: (repo_root :str) :str {
+    if !fs_exists(repo_root) { return "" }
+    set entries = fs_list(repo_root)
+    set n = rt_vec_len(entries)
+    set result = "" :str mut
+    set i = 0 :i64 mut
+    while i < n {
+        set e = strings::trim(rt_vec_get_str(entries i))
+        if e != "." && e != ".." && e != ".git" {
+            set full = repo_root + "/" + e
+            if fs_is_dir(full) {
+                set owl_toml = full + "/owl.toml"
+                if fs_exists(owl_toml) {
+                    if result == "" {
+                        set result = e
+                    } else {
+                        set result = result + "\n" + e
+                    }
+                }
+            }
+        }
+        set i += 1
+    }
+    return result
+}
+
+fn sync_one_pkg: (pkg :str force :bool) {
+    set pn = pkg
+    use dasu("")
+    use dasu("== syncing: " + pn + " ==")
+
+    set p1 = pkg
+    set src_url = registry_read(p1 "source_url") :str mut
+    set p2 = pkg
+    set src_path = registry_read(p2 "source_path") :str mut
+
+    if src_url == "" {
+        set p3 = pkg
+        use error_line("OWL0030" "package '" + p3 + "' not in registry. Use 'owl import-repo <url>' first.")
+        return
+    }
+
+    if src_path == "" {
+        set p4 = pkg
+        set src_path = p4
+    }
+
+    set stamp = strings::trim(proc_run("date +%s"))
+    set tmp_clone = sync_tmp_dir() + "/" + stamp :str mut
+    use proc_run("rm -rf " + tmp_clone)
+
+    set tc1 = tmp_clone
+    set clone_out = proc_run("git clone " + src_url + " " + tc1 + " 2>&1")
+    set tc2 = tmp_clone
+    if !fs_exists(tc2 + "/.git") {
+        set tc3 = tmp_clone
+        use error_line("OWL0031" "failed to clone " + src_url + ": " + clone_out)
+        use proc_run("rm -rf " + tc3)
+        return
+    }
+    use dasu("  cloned " + src_url)
+
+    set tc4 = tmp_clone
+    set commit = strings::trim(proc_run("git -C " + tc4 + " rev-parse HEAD"))
+
+    set tc5 = tmp_clone
+    set pkg_dir = tc5 + "/" + src_path
+    set owl_toml = pkg_dir + "/owl.toml"
+
+    set ot1 = owl_toml
+    set validation_err = validate_owl_toml(ot1)
+    if validation_err != "" {
+        set p5 = pkg
+        set tc6 = tmp_clone
+        use error_line("OWL0032" p5 + ": " + validation_err)
+        use proc_run("rm -rf " + tc6)
+        return
+    }
+    use dasu("  [project] + [exports] validated")
+
+    set pd1 = pkg_dir
+    set ot2 = owl_toml
+    set export_errs = validate_export_paths(pd1 ot2)
+    if export_errs != "" {
+        set err_lines = strings::split(export_errs "\n")
+        set en = rt_vec_len(err_lines)
+        set ei = 0 :i64 mut
+        while ei < en {
+            set em = strings::trim(rt_vec_get_str(err_lines ei))
+            if em != "" { use error_line("OWL0033" em) }
+            set ei += 1
+        }
+        set tc7 = tmp_clone
+        use proc_run("rm -rf " + tc7)
+        return
+    }
+    use dasu("  export paths verified")
+
+    set pd2 = pkg_dir
+    set sha256 = compute_tree_sha256(pd2)
+    use dasu("  sha256: " + sha256)
+
+    set p6 = pkg
+    set dest = store_pkg_dir(p6) :str mut
+    set d1 = dest
+    use proc_run("rm -rf " + d1)
+    set d2 = dest
+    use mkdir_p(d2)
+    set pd3 = pkg_dir
+    set d3 = dest
+    use proc_run("cp -R " + pd3 + "/. " + d3)
+    set d4 = dest
+    use dasu("  installed at " + d4)
+
+    set p7 = pkg
+    set s1 = src_url
+    set s2 = src_path
+    set sh = sha256
+    set cb = current_build()
+    set cm = commit
+    use registry_write(p7 s1 s2 sh "" cb cm)
+    set tc8 = tmp_clone
+    use proc_run("rm -rf " + tc8)
+    set p8 = pkg
+    use dasu("  sync complete for " + p8)
 }
 
 fn check_print_warning_summary: (file :str out :str strict :str) :str {
@@ -409,7 +720,7 @@ fn check_print_warning_summary: (file :str out :str strict :str) :str {
     }
     set lifecycle = w28 + w29 + w30 + w31 + w32 + w33
 
-    use dasu("check[OWL] ── " + file)
+    use dasu("check[OWL] " + file)
     use dasu("  total warnings: " + str(total))
     use dasu("  lifecycle warnings: " + str(lifecycle))
     if strict == "1" && total > 0 {
@@ -814,55 +1125,316 @@ fn cmd_test: (args :vec[str]) {
 }
 
 fn cmd_info: () {
-    use dasu("  ╭─[ project ]")
     if has_project() {
-    set p_name = toml_get("owl.toml" "project" "name") :str mut
-    if p_name == "" { set p_name = "<none>" }
-    set p_version = toml_get("owl.toml" "project" "version") :str mut
-    if p_version == "" { set p_version = "<none>" }
-    set p_entry = toml_get("owl.toml" "project" "entry") :str mut
-    if p_entry == "" { set p_entry = "code/main.mire" }
-    set p_desc = toml_get("owl.toml" "project" "description") :str mut
-    if p_desc == "" { set p_desc = "<empty>" }
-        use dasu("  │  source  · owl.toml")
-        use dasu("  │  name    · " + p_name)
-        use dasu("  │  version · " + p_version)
-        use dasu("  │  entry   · " + p_entry)
-        use dasu("  │  desc    · " + p_desc)
+        set p_name = toml_get("owl.toml" "project" "name") :str mut
+        if p_name == "" { set p_name = "<none>" }
+        set p_version = toml_get("owl.toml" "project" "version") :str mut
+        if p_version == "" { set p_version = "<none>" }
+        set p_entry = toml_get("owl.toml" "project" "entry") :str mut
+        if p_entry == "" { set p_entry = "code/main.mire" }
+        set p_desc = toml_get("owl.toml" "project" "description") :str mut
+        if p_desc == "" { set p_desc = "<empty>" }
+        use dasu("info -- " + p_name + " v" + p_version)
+        use dasu("  entry . " + p_entry)
+        if p_desc != "<empty>" {
+            use dasu("  desc  . " + p_desc)
+        }
+        set deps_str = toml_keys("owl.toml" "dependencies")
+        if deps_str != "" {
+            use dasu("  deps  . yes")
+        }
+        set data = "" :str mut
+        if fs_exists("tests") {
+            set data = scan_tests("tests")
+        }
+        if data != "" {
+            set recs = strings::split(data "---\n")
+            set tc = len(recs) :i64 mut
+            if tc > 0 { set tc = tc - 1 }
+            set tests_str = "yes" :str mut
+            if tc == 1 { set tests_str = "1 test" }
+            if tc > 1 { set tests_str = rt_i64_to_string(tc) + " tests" }
+            use dasu("  tests . " + tests_str)
+        }
     } else {
-        use dasu("  │  source  · <no owl.toml>")
+        use dasu("info -- <no project>")
     }
 
-    set c_target = proc_run("uname -m") :str mut
-    set c_target = strings::trim(c_target) + "-unknown-linux-gnu"
-    set b_profile = "debug" :str mut
-    set b_opt = "0" :str mut
     if has_project() {
+        set c_target = proc_run("uname -m") :str mut
+        set c_target = strings::trim(c_target)
+        set b_profile = "debug" :str mut
+        set b_opt = "0" :str mut
         set raw_opt = toml_get("owl.toml" "build" "optimization")
         if raw_opt == "release" {
             set b_profile = "release"
             set b_opt = "3"
         }
+        use dasu("  engine . " + compiler_version())
+        use dasu("  target . " + c_target)
+        use dasu("  profile. " + b_profile + " (opt-level: " + b_opt + ")")
     }
-    use dasu("  ├─[ compiler & build ]")
-    use dasu("  │  engine  · " + compiler_version())
-    use dasu("  │  target  · " + c_target)
-    use dasu("  │  profile · " + b_profile + " (opt-level: " + b_opt + ")")
 
-    set cpath = ".cache" :str mut
-    if has_project() { set cpath = "bin/.cache" }
-    set enabled = "no" :str mut
-    if fs_exists(cpath) { set enabled = "yes" }
-    set max_units = "256" :str mut
-    if has_project() {
-        set cmax = toml_get("owl.toml" "cache" "max_units")
-        if cmax != "" { set max_units = cmax }
+    set all_pkgs = registry_list()
+    if all_pkgs != "" {
+        set pkg_lines = strings::split(all_pkgs "\n")
+        set pn = len(pkg_lines)
+        set pi = 0 :i64 mut
+        set pkg_names = "" :str mut
+        while pi < pn {
+            set p = strings::trim(lists::get(pkg_lines pi))
+            if p != "" {
+                if pkg_names != "" { set pkg_names = pkg_names + ", " }
+                set pkg_names = pkg_names + p
+            }
+            set pi += 1
+        }
+        use dasu("  pkgs  . " + pkg_names)
     }
-    use dasu("  ├─[ cache ]")
-    use dasu("  │  status    · " + enabled)
-    use dasu("  │  max_units · " + max_units)
-    use dasu("  │  hit_rate  · n/a")
-    use dasu("  ╰─ project info loaded successfully")
+}
+
+fn cmd_import_repo: (args :vec[str]) {
+    set n = rt_vec_len(args)
+    if n < 3 {
+        use dasu("Usage: owl import-repo <url>")
+        return
+    }
+    set url = strings::trim(rt_vec_get_str(args 2)) :str mut
+    if url == "" {
+        use dasu("Usage: owl import-repo <url>")
+        return
+    }
+
+    ensure_owl_home()
+
+    set stamp = strings::trim(proc_run("date +%s"))
+    set tmp_clone = sync_tmp_dir() + "/" + stamp :str mut
+
+    set t0 = tmp_clone
+    use proc_run("rm -rf " + t0)
+
+    set u0 = url
+    use dasu("Cloning " + u0 + "...")
+
+    set u1 = url
+    set t1 = tmp_clone
+    set clone_out = proc_run("git clone " + u1 + " " + t1 + " 2>&1")
+
+    set t2 = tmp_clone
+    if !fs_exists(t2 + "/.git") {
+        use error_line("OWL0020" "failed to clone: " + clone_out)
+        return
+    }
+
+    set t3 = tmp_clone
+    set commit = strings::trim(proc_run("git -C " + t3 + " rev-parse HEAD"))
+
+    set t4 = tmp_clone
+    set pkg_dirs = find_package_dirs(t4)
+    set dir_list = strings::split(pkg_dirs "\n")
+    set dn = rt_vec_len(dir_list)
+    set found = 0 :i64 mut
+
+    set di = 0 :i64 mut
+    while di < dn {
+        set sub = strings::trim(rt_vec_get_str(dir_list di))
+        if sub != "" {
+            set found = found + 1
+            set t5 = tmp_clone
+            set owl_toml = t5 + "/" + sub + "/owl.toml"
+            set pkg_name = strings::trim(toml_get(owl_toml "project" "name")) :str mut
+            if pkg_name == "" {
+                set s1 = sub
+                set pkg_name = s1
+                set s2 = sub
+                use warn_line("OWL0021" "no [project].name in " + s2 + ", using directory name")
+            }
+
+            set p1 = pkg_name
+            set u2 = url
+            set s3 = sub
+            set c1 = commit
+            use registry_write(p1 u2 s3 "" "" "" c1)
+
+            set p2 = pkg_name
+            set u3 = url
+            set s4 = sub
+            use dasu("  registered: " + p2 + " -> " + u3 + " (" + s4 + ")")
+        }
+        set di += 1
+    }
+
+    set t6 = tmp_clone
+    use proc_run("rm -rf " + t6)
+
+    if found == 0 {
+        use dasu("No packages found in repo (no subdirectories with owl.toml).")
+    } else {
+        use dasu("Found " + str(found) + " package(s). Use 'owl sync <pkg>' to install.")
+    }
+}
+
+fn cmd_sync: (args :vec[str]) {
+    set n = rt_vec_len(args)
+    ensure_owl_home()
+
+    set pkg_name = "" :str mut
+    set is_all = false :bool mut
+    set force = false :bool mut
+
+    set i = 2 :i64 mut
+    while i < n {
+        set a = rt_vec_get_str(args i)
+        if a == "--all" { set is_all = true }
+        if a == "--force" || a == "-f" { set force = true }
+        if a != "--all" && a != "--force" && a != "-f" && !strings::starts_with(a "-") {
+            set pkg_name = a
+        }
+        set i += 1
+    }
+
+    if pkg_name == "" && !is_all {
+        use dasu("Usage: owl sync <pkg> [--force]  or  owl sync --all")
+        return
+    }
+
+    if is_all {
+        set all_pkgs = registry_list()
+        if all_pkgs == "" {
+            use dasu("No packages in registry. Use 'owl import-repo <url>' first.")
+            return
+        }
+        set pkg_list = strings::split(all_pkgs "\n")
+        set pn = rt_vec_len(pkg_list)
+        set pi = 0 :i64 mut
+        while pi < pn {
+            set p = strings::trim(rt_vec_get_str(pkg_list pi))
+            if p != "" { sync_one_pkg(p force) }
+            set pi += 1
+        }
+        return
+    }
+
+    sync_one_pkg(pkg_name force)
+}
+
+fn cmd_drop: (args :vec[str]) {
+    set n = rt_vec_len(args)
+    if n < 3 {
+        use dasu("Usage: owl drop <pkg>")
+        return
+    }
+    set pkg = strings::trim(rt_vec_get_str(args 2)) :str mut
+    if pkg == "" {
+        use dasu("Usage: owl drop <pkg>")
+        return
+    }
+
+    set p1 = pkg
+    set store_p = store_pkg_dir(p1)
+    if fs_exists(store_p) {
+        use proc_run("rm -rf " + store_p)
+        use dasu("  removed from store")
+    }
+    set p2 = pkg
+    set reg_f = registry_file(p2)
+    if fs_exists(reg_f) {
+        set p3 = pkg
+        registry_delete(p3)
+        use dasu("  removed from registry")
+    }
+    set p4 = pkg
+    use dasu("  dropped: " + p4)
+}
+
+fn cmd_verify: (args :vec[str]) {
+    set n = rt_vec_len(args)
+    if n < 3 {
+        use dasu("Usage: owl verify <pkg>")
+        return
+    }
+    set pkg = strings::trim(rt_vec_get_str(args 2)) :str mut
+    if pkg == "" {
+        use dasu("Usage: owl verify <pkg>")
+        return
+    }
+
+    set p1 = pkg
+    set stored_sha256 = registry_read(p1 "sha256")
+    if stored_sha256 == "" {
+        set p2 = pkg
+        use dasu("Package '" + p2 + "' not synced. Use 'owl sync " + p2 + "' first.")
+        return
+    }
+
+    set p3 = pkg
+    set install_dir = store_pkg_dir(p3)
+    if !fs_exists(install_dir) {
+        set p4 = pkg
+        use dasu("Package '" + p4 + "' not found at " + install_dir)
+        return
+    }
+
+    set computed_sha256 = compute_tree_sha256(install_dir)
+    use dasu("  stored sha256:  " + stored_sha256)
+    use dasu("  computed sha256: " + computed_sha256)
+
+    if stored_sha256 == computed_sha256 {
+        use dasu("  SHA256: OK")
+    } else {
+        set p5 = pkg
+        use error_line("OWL0040" "SHA256 mismatch for " + p5 + " -- re-sync with 'owl sync " + p5 + " --force'")
+    }
+}
+
+fn cmd_info_pkg: (args :vec[str]) {
+    set n = rt_vec_len(args)
+    if n < 3 {
+        set all = registry_list()
+        if all == "" {
+            use dasu("No packages in registry.")
+            return
+        }
+        use dasu("Registered packages:")
+        set lines = strings::split(all "\n")
+        set ln = rt_vec_len(lines)
+        set li = 0 :i64 mut
+        while li < ln {
+            set p = strings::trim(rt_vec_get_str(lines li))
+            if p != "" {
+                set p_inst = p
+                set inst = registry_read(p_inst "installed_build")
+                if inst != "" {
+                    use dasu("  " + p + "  (build: " + inst + ")")
+                } else {
+                    use dasu("  " + p + "  (not synced)")
+                }
+            }
+            set li += 1
+        }
+        return
+    }
+
+    set pkg = strings::trim(rt_vec_get_str(args 2)) :str mut
+    set pa = pkg
+    set src_url = registry_read(pa "source_url")
+    if src_url == "" {
+        set pb = pkg
+        use dasu("Package '" + pb + "' not found in registry.")
+        return
+    }
+
+    set pc1 = pkg
+    use dasu("Package: " + pc1)
+    use dasu("  source_url:      " + src_url)
+    set pc2 = pkg
+    use dasu("  source_path:     " + registry_read(pc2 "source_path"))
+    set pc3 = pkg
+    use dasu("  sha256:          " + registry_read(pc3 "sha256"))
+    set pc4 = pkg
+    use dasu("  installed_build: " + registry_read(pc4 "installed_build"))
+    set pc5 = pkg
+    use dasu("  last_commit:     " + registry_read(pc5 "last_commit"))
 }
 
 fn print_banner: () {
@@ -876,16 +1448,26 @@ fn print_help: () {
     use dasu("")
     use dasu("Usage: owl <command> [args] [flags]")
     use dasu("")
-    use dasu("Commands:")
-    use dasu("  add <Name> [--version <ver>] [--path <path>]")
-    use dasu("  new <Name>")
+    use dasu("Build commands:")
     use dasu("  run [file] [--debug|--release|-d|-r] [-O <0|1|2|3|s|z>] [-- args]")
     use dasu("  build [file] [--debug|--release|-d|-r] [-O <0|1|2|3|s|z>]")
     use dasu("  check [file] [--all] [--strict] [--deny Wxxxx]")
-    use dasu("  profile [--json] [--history] [--compare]")
     use dasu("  test [filter|--filter <text>]")
+    use dasu("")
+    use dasu("Project commands:")
+    use dasu("  new <Name>")
+    use dasu("  add <Name> [--version <ver>] [--path <path>]")
     use dasu("  clean [--cache] [--bin] [--all|-A]")
+    use dasu("  profile [--json] [--history] [--compare]")
     use dasu("  info")
+    use dasu("")
+    use dasu("Registry commands (~/.owl/):")
+    use dasu("  import-repo <url>          register packages from a git repo")
+    use dasu("  sync <pkg> [--force]       install/update a package from registry")
+    use dasu("  sync --all                 sync all registered packages")
+    use dasu("  drop <pkg>                 remove from store and registry")
+    use dasu("  verify <pkg>               verify SHA256 of installed package")
+    use dasu("  info <pkg>                 show package details")
 }
 
 pub fn main: () {
@@ -932,6 +1514,12 @@ pub fn main: () {
         return
     }
     set args_copy6 = args_copy5
+    set args_copy7 = args_copy6
+    set args_copy8 = args_copy6
+    set args_copy9 = args_copy6
+    set args_copy10 = args_copy6
+    set args_copy11 = args_copy6
+    set args_copy12 = args_copy6
     if cmd == "test" {
         cmd_test(args_copy5)
         return
@@ -941,7 +1529,31 @@ pub fn main: () {
         return
     }
     if cmd == "info" {
+        if n >= 3 && !strings::starts_with(lists::get(args_copy7 2) "-") {
+            cmd_info_pkg(args_copy8)
+            return
+        }
         cmd_info()
+        return
+    }
+
+    if cmd == "import-repo" || cmd == "import_repo" || cmd == "import" {
+        cmd_import_repo(args_copy9)
+        return
+    }
+
+    if cmd == "sync" {
+        cmd_sync(args_copy10)
+        return
+    }
+
+    if cmd == "drop" {
+        cmd_drop(args_copy11)
+        return
+    }
+
+    if cmd == "verify" {
+        cmd_verify(args_copy12)
         return
     }
 

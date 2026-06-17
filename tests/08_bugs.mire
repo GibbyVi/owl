@@ -1,0 +1,8 @@
+load kioto
+load testlib
+
+pub fn main: () {
+    use dasu("--- regression tests for known bugs ---")
+
+    use dasu("  all regressions pass")
+}

@@ -1,0 +1,81 @@
+load kioto
+load testlib
+
+pub fn main: () {
+    use dasu("--- strings ---")
+
+    set s = "hello" :str
+    testlib.assert_eq_str("hello" s)
+    use dasu("  string literal: ok")
+
+    set s2 = "hello" + " world" :str
+    testlib.assert_eq_str("hello world" s2)
+    use dasu("  string concatenation: ok")
+
+    testlib.assert_eq(5 strings.len("hello"))
+    testlib.assert_eq(0 strings.len(""))
+    use dasu("  strings.len: ok")
+
+    testlib.assert_true(strings.is_empty(""))
+    testlib.assert_false(strings.is_empty("x"))
+    use dasu("  strings.is_empty: ok")
+
+    testlib.assert_eq_str("HELLO" strings.upper("hello"))
+    testlib.assert_eq_str("hello" strings.lower("HELLO"))
+    use dasu("  strings.upper/lower: ok")
+
+    testlib.assert_eq_str("hello" strings.trim("  hello  "))
+    use dasu("  strings.trim: ok")
+
+    testlib.assert_true(strings.contains("hello world" "world"))
+    testlib.assert_false(strings.contains("hello world" "xyz"))
+    use dasu("  strings.contains: ok")
+
+    testlib.assert_true(strings.startswith("hello" "he"))
+    testlib.assert_false(strings.startswith("hello" "el"))
+    testlib.assert_true(strings.endswith("hello" "lo"))
+    use dasu("  strings.startswith/endswith: ok")
+
+    testlib.assert_eq_str("he" strings.substr("hello" 0 2))
+    testlib.assert_eq_str("ell" strings.substr("hello" 1 3))
+    testlib.assert_eq_str("o" strings.substr("hello" 4 1))
+    use dasu("  strings.substr: ok")
+
+    set parts = strings.split("a,b,c" ",")
+    testlib.assert_eq(3 len(parts))
+    testlib.assert_eq_str("a" lists.get(parts 0))
+    testlib.assert_eq_str("b" lists.get(parts 1))
+    testlib.assert_eq_str("c" lists.get(parts 2))
+    use dasu("  strings.split: ok")
+
+    set joined = strings.join(parts ",")
+    testlib.assert_eq_str("a,b,c" joined)
+    use dasu("  strings.join: ok")
+
+    testlib.assert_eq_str("hello!" strings.replace("hello?" "?" "!"))
+    use dasu("  strings.replace: ok")
+
+    testlib.assert_eq_str("abab" strings.repeat("ab" 2))
+    testlib.assert_eq_str("" strings.repeat("x" 0))
+    use dasu("  strings.repeat: ok")
+
+    testlib.assert_eq(2 strings.index_of("hello" "l"))
+    testlib.assert_eq(-1 strings.index_of("hello" "z"))
+    use dasu("  strings.index_of: ok")
+
+    testlib.assert_eq_str("42" strings.from_i64(42))
+    testlib.assert_eq_str("-5" strings.from_i64(-5))
+    testlib.assert_eq_str("0" strings.from_i64(0))
+    use dasu("  strings.from_i64: ok")
+
+    set empty = "" :str
+    testlib.assert_eq_str("" empty + "")
+    testlib.assert_eq_str("a" "" + "a")
+    use dasu("  empty string handling: ok")
+
+    set long = strings.repeat("x" 1000)
+    testlib.assert_eq(1000 strings.len(long))
+    use dasu("  large string (1000 chars): ok")
+
+    use dasu("all string tests passed")
+}

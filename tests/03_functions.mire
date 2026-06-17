@@ -1,0 +1,67 @@
+load kioto
+load testlib
+
+fn add: (a :i64 b :i64) :i64 {
+    return a + b
+}
+
+fn fib: (n :i64) :i64 {
+    if n <= 1 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fn fact: (n :i64) :i64 {
+    if n <= 1 { return 1 }
+    return n * fact(n - 1)
+}
+
+fn is_even: (n :i64) :bool {
+    return n % 2 == 0
+}
+
+fn gcd: (a :i64 b :i64) :i64 {
+    if b == 0 { return a }
+    return gcd(b a % b)
+}
+
+fn sum_range: (lo :i64 hi :i64) :i64 {
+    if lo > hi { return 0 }
+    set total = 0 :i64 mut
+    set i = lo :i64 mut
+    while i <= hi {
+        set total = total + i
+        set i = i + 1
+    }
+    return total
+}
+
+pub fn main: () {
+    use dasu("--- functions ---")
+
+    testlib::assert_eq(5 add(2 3))
+    use dasu("  basic function call: ok")
+
+    testlib::assert_eq(55 fib(10))
+    use dasu("  recursive fibonacci(10): ok")
+
+    testlib::assert_eq(120 fact(5))
+    use dasu("  recursive factorial(5): ok")
+
+    testlib::assert_eq(3628800 fact(10))
+    use dasu("  recursive factorial(10): ok")
+
+    testlib::assert_true(is_even(42))
+    testlib::assert_false(is_even(7))
+    use dasu("  predicate function: ok")
+
+    testlib::assert_eq(6 gcd(12 18))
+    testlib::assert_eq(1 gcd(7 13))
+    testlib::assert_eq(21 gcd(42 21))
+    use dasu("  recursive gcd: ok")
+
+    testlib::assert_eq(55 sum_range(1 10))
+    testlib::assert_eq(0 sum_range(5 3))
+    use dasu("  imperative sum_range: ok")
+
+    use dasu("all function tests passed")
+}

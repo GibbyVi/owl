@@ -1,0 +1,53 @@
+load kioto
+load testlib
+
+pub fn main: () {
+    use dasu("--- lists ---")
+
+    set lst = [1 2 3] :vec[i64]
+    testlib.assert_eq(3 len(lst))
+    use dasu("  list literal + len builtin: ok")
+
+    testlib.assert_eq(1 lists.get(lst 0))
+    testlib.assert_eq(2 lists.get(lst 1))
+    testlib.assert_eq(3 lists.get(lst 2))
+    use dasu("  lists.get: ok")
+
+    set empty = [] :vec[i64]
+    testlib.assert_eq(0 len(empty))
+    use dasu("  empty list: ok")
+
+    testlib.assert_true(lists.contains([1 2 3] 2))
+    testlib.assert_false(lists.contains([1 2 3] 5))
+    use dasu("  lists.contains: ok")
+
+    testlib.assert_eq(1 lists.index_of([10 20 30] 20))
+    testlib.assert_eq(-1 lists.index_of([10 20 30] 99))
+    use dasu("  lists.index_of: ok")
+
+    testlib.assert_eq(1 lists.first([1 2 3]))
+    testlib.assert_eq(3 lists.last([1 2 3]))
+    use dasu("  lists.first/last: ok")
+
+    set rev = lists.reverse([1 2 3])
+    testlib.assert_eq(3 lists.get(rev 0))
+    testlib.assert_eq(2 lists.get(rev 1))
+    testlib.assert_eq(1 lists.get(rev 2))
+    use dasu("  lists.reverse: ok")
+
+    testlib.assert_true(lists.is_empty([] :vec[i64]))
+    testlib.assert_false(lists.is_empty([1] :vec[i64]))
+    use dasu("  lists.is_empty: ok")
+
+    set big = [] :vec[i64] mut
+    set i = 0 :i64 mut
+    while i < 100 {
+        set val = i :i64
+        set big = lists.push(big val)
+        set i = i + 1
+    }
+    testlib.assert_eq(100 len(big))
+    use dasu("  large list (100 elements): ok")
+
+    use dasu("all list tests passed")
+}

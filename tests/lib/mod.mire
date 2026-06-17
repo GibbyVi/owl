@@ -1,0 +1,65 @@
+module testlib
+
+extern fn rt_i64_to_string: (value :i64) :str lib "c"
+extern fn rt_f64_to_string: (value :f64) :str lib "c"
+extern fn pal_proc_exit: (status :i64) lib "c"
+
+fn fail: (msg :str) {
+    use dasu("  FAIL: " + msg)
+    use pal_proc_exit(1)
+}
+
+pub fn assert: (cond :bool) {
+    if !cond {
+        fail("assertion failed")
+    }
+}
+
+pub fn assert_msg: (cond :bool msg :str) {
+    if !cond {
+        fail(msg)
+    }
+}
+
+pub fn assert_eq: (expected :i64 actual :i64) {
+    if expected != actual {
+        fail("expected " + rt_i64_to_string(expected) + ", got " + rt_i64_to_string(actual))
+    }
+}
+
+pub fn assert_ne: (a :i64 b :i64) {
+    if a == b {
+        fail("not equal, both " + rt_i64_to_string(a))
+    }
+}
+
+pub fn assert_eq_str: (a :str b :str) {
+    if a != b {
+        fail("expected \"" + a + "\", got \"" + b + "\"")
+    }
+}
+
+pub fn assert_true: (cond :bool) {
+    if !cond {
+        fail("expected true, got false")
+    }
+}
+
+pub fn assert_false: (cond :bool) {
+    if cond {
+        fail("expected false, got true")
+    }
+}
+
+pub fn assert_lt: (a :i64 b :i64) {
+    if !(a < b) {
+        fail("expected " + rt_i64_to_string(a) + " < " + rt_i64_to_string(b))
+    }
+}
+
+pub fn assert_gt: (a :i64 b :i64) {
+    if !(a > b) {
+        fail("expected " + rt_i64_to_string(a) + " > " + rt_i64_to_string(b))
+    }
+}
+
