@@ -764,7 +764,12 @@ fn check_print_warning_summary: (file :str out :str strict :str) :str {
 }
 
 fn compile_pipeline: (args :vec[str] is_run :bool) {
-    set file = "code/main.mire" :str mut
+    set default_file = "code/main.mire" :str mut
+    if fs_exists("owl.toml") {
+        set entry = toml_get("owl.toml" "project" "entry")
+        if entry != "" { set default_file = entry }
+    }
+    set file = default_file :str mut
     set profile = "debug" :str mut
     set opt = "0" :str mut
     set pass = ""
@@ -787,7 +792,7 @@ fn compile_pipeline: (args :vec[str] is_run :bool) {
                     if strings::startswith(a "-O") && len(a) > 2 {
                         set opt = strings::replace(a "-O" "")
                     } else {
-                        if !strings::startswith(a "-") && file == "code/main.mire" {
+                        if !strings::startswith(a "-") && file == default_file {
                             set file = a
                         }
                     }
@@ -802,7 +807,7 @@ fn compile_pipeline: (args :vec[str] is_run :bool) {
         use warn_line("OWL0001" "no project found; using local .cache and bin/")
     }
 
-    if file == "" { set file = "code/main.mire" }
+    if file == "" { set file = default_file }
     if !fs_exists(file) {
         use error_line("OWL0002" "input not found: " + file)
         return
@@ -1010,7 +1015,12 @@ fn cmd_run: (args :vec[str]) {
 }
 
 fn cmd_check: (args :vec[str]) {
-    set file = "code/main.mire" :str mut
+    set default_file = "code/main.mire" :str mut
+    if fs_exists("owl.toml") {
+        set entry = toml_get("owl.toml" "project" "entry")
+        if entry != "" { set default_file = entry }
+    }
+    set file = default_file :str mut
     set all = "0" :str mut
     set strict = "0" :str mut
     set deny = "" :str mut
@@ -1035,7 +1045,7 @@ fn cmd_check: (args :vec[str]) {
                         }
                     }
                 } else {
-                    if !strings::startswith(a "-") && file == "code/main.mire" {
+                    if !strings::startswith(a "-") && file == default_file {
                         set file = a
                     }
                 }
