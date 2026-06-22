@@ -229,6 +229,147 @@ fn find_mire_files: (dir :str) :str {
     return result
 }
 
+fn scan_test_functions: (path :str) :str {
+    set result = "" :str mut
+    if !fs_exists(path) { return result }
+    set content = fs_read(path)
+    set lines = strings::split(content "\n")
+    set n = len(lines)
+    set i = 0 :i64 mut
+    while i < n {
+        set line = strings::trim(lists::get(lines i))
+        if strings::startswith(line "#!cfg::test") || strings::startswith(line "#!cfg::") {
+            set j = i + 1
+            if j < n {
+                set next_line = strings::trim(lists::get(lines j))
+                if strings::startswith(next_line "pub fn ") {
+                    set after_fn = strings::replace_first(next_line "pub fn " "")
+                    set colon_pos = strings::index_of(after_fn ":")
+                    if colon_pos >= 0 {
+                        set func_name = strings::trim(strings::substr(after_fn 0 colon_pos))
+                        if func_name != "" {
+                            if result == "" {
+                                set result = path + "|" + func_name
+                            } else {
+                                set result = result + "\n" + path + "|" + func_name
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        set i += 1
+    }
+    if result == "" {
+        if strings::contains(content "pub fn main") {
+            set result = path + "|main"
+        }
+    }
+    return result
+}
+
+fn scan_all_tests: (dir :str) :str {
+    set files = find_mire_files(dir)
+    if files == "" { return "" }
+    set file_list = strings::split(files "\n")
+    set result = "" :str mut
+    set total = len(file_list)
+    set i = 0 :i64 mut
+    while i < total {
+        set file = strings::trim(lists::get(file_list i))
+        if file != "" {
+            set found = scan_test_functions(file)
+            if found != "" {
+                if result == "" {
+                    set result = found
+                } else {
+                    set result = result + "\n" + found
+                }
+            }
+        }
+        set i += 1
+    }
+    return result
+}
+
+fn build_test_harness: (test_data :str filter :str) :str {
+    set records = strings::split(test_data "\n")
+    set total = len(records)
+    set loads = "" :str mut
+    set body = "" :str mut
+    set count = 0 :i64 mut
+    set seen = "" :str mut
+    set i = 0 :i64 mut
+    while i < total {
+        set rec = strings::trim(lists::get(records i))
+        if rec != "" {
+            set parts = strings::split(rec "|")
+            if len(parts) >= 2 {
+                set file = strings::trim(lists::get(parts 0))
+                set func = strings::trim(lists::get(parts 1))
+                if filter != "" {
+                    set combined = func + " " + file
+                    if len(strings::split(combined filter)) <= 1 {
+                        set i += 1
+                        continue
+                    }
+                }
+                set imp_path = file :str mut
+                if strings::endswith(imp_path ".mire") {
+                    set imp_path = strings::replace(imp_path ".mire" "")
+                }
+                set path_parts = strings::split(imp_path "/")
+                set mod_name = lists::get(path_parts len(path_parts) - 1)
+                if !strings::contains(seen imp_path) {
+                    if seen == "" {
+                        set seen = imp_path
+                    } else {
+                        set seen = seen + "\n" + imp_path
+                    }
+                    set loads = loads + "load \"" + imp_path + "\"\n"
+                }
+                set call = mod_name + "::" + func + "()"
+                set body = body + "    use dasu(\"test " + mod_name + "." + func + " ...\")\n"
+                if func == "main" {
+                    set body = body + "    " + call + "\n"
+                    set body = body + "    use dasu(\"  ok\")\n"
+                    set body = body + "    set passed = passed + 1\n"
+                } else {
+                    set body = body + "    set ok = " + call + "\n"
+                    set body = body + "    if ok {\n"
+                    set body = body + "        use dasu(\"  ok\")\n"
+                    set body = body + "        set passed = passed + 1\n"
+                    set body = body + "    } else {\n"
+                    set body = body + "        set failed = failed + 1\n"
+                    set body = body + "        use dasu(\"  FAILED\")\n"
+                    set body = body + "        set failures = failures + \"" + mod_name + "." + func + "\\n\"\n"
+                    set body = body + "    }\n"
+                }
+                set count = count + 1
+            }
+        }
+        set i += 1
+    }
+    if count == 0 { return "" }
+    set count_str = str(count)
+    set header = "load kioto\n" + loads :str mut
+    set header = header + "pub fn main: () {\n"
+    set header = header + "    set passed = 0 :i64 mut\n"
+    set header = header + "    set failed = 0 :i64 mut\n"
+    set header = header + "    set failures = \"\" :str mut\n"
+    set header = header + "    use dasu(\"running " + count_str + " test(s)\\n\")\n"
+    set footer = "\n    use dasu(\"\")\n" :str mut
+    set footer = footer + "    if failures != \"\" {\n"
+    set footer = footer + "        use dasu(\"failures:\")\n"
+    set footer = footer + "        use dasu(failures)\n"
+    set footer = footer + "    }\n"
+    set footer = footer + "    set status = \"ok\"\n"
+    set footer = footer + "    if failed > 0 { set status = \"FAILED\" }\n"
+    set footer = footer + "    use dasu(\"test result: \" + status + \". \" + str(passed) + \" passed; \" + str(failed) + \" failed; " + count_str + " total\")\n"
+    set footer = footer + "}\n"
+    return header + body + footer
+}
+
 pub fn run_tests: (filter :str compiler_cmd :str) {
     use dasu("")
     use dasu("== owl test ==")
@@ -238,54 +379,59 @@ pub fn run_tests: (filter :str compiler_cmd :str) {
         use dasu("Error: '" + test_dir + "' not found")
         return
     }
-    use dasu("Scanning " + test_dir + "...")
-    set file_list = find_mire_files(test_dir)
-    if file_list == "" {
+    use dasu("Scanning " + test_dir + " for #!cfg::test...")
+    set test_data = scan_all_tests(test_dir)
+    if test_data == "" {
         use dasu("No tests found.")
         return
     }
-    set files = strings::split(file_list "\n")
-    set total = len(files)
+    set records = strings::split(test_data "\n")
+    set total = len(records)
     set passed = 0 :i64 mut
     set failed = 0 :i64 mut
+    set ran = 0 :i64 mut
     set i = 0 :i64 mut
     while i < total {
-        set file = strings::trim(lists::get(files i))
-        if file == "" {
-            set i += 1
-            continue
-        }
-        if filter != "" {
-            set parts = strings::split(file filter)
-            if len(parts) <= 1 {
-                set i += 1
-                continue
+        set rec = strings::trim(lists::get(records i))
+        if rec != "" {
+            set parts = strings::split(rec "|")
+            if len(parts) >= 2 {
+                set file = strings::trim(lists::get(parts 0))
+                set func = strings::trim(lists::get(parts 1))
+                if filter != "" {
+                    set combined = func + " " + file
+                    if len(strings::split(combined filter)) <= 1 {
+                        set i += 1
+                        continue
+                    }
+                }
+                set ran = ran + 1
+                set base = file :str mut
+                if strings::endswith(base ".mire") {
+                    set base = strings::replace(base ".mire" "")
+                }
+                set stem_parts = strings::split(base "/")
+                set stem = lists::get(stem_parts len(stem_parts) - 1)
+                set display = stem + "." + func
+                use dasu("test " + display + " ...")
+                proc_run(compiler_cmd + " build " + file + " --debug -O0 2>/dev/null")
+                set bin_path = "bin/debug/" + stem
+                if fs_exists(bin_path) {
+                    proc_run("./" + bin_path)
+                    set passed = passed + 1
+                    use dasu("  ok")
+                } else {
+                    set failed = failed + 1
+                    use dasu("  FAILED (build error)")
+                }
             }
-        }
-        set display = file
-        use dasu("test " + display + " ...")
-        proc_run(compiler_cmd + " build " + file + " --debug -O0 2>/dev/null")
-        set base = file :str mut
-        if strings::endswith(base ".mire") {
-            set base = strings::replace(base ".mire" "")
-        }
-        set parts = strings::split(base "/")
-        set stem = lists::get(parts len(parts) - 1)
-        set bin_path = "bin/debug/" + stem
-        if fs_exists(bin_path) {
-            proc_run("./" + bin_path)
-            set passed = passed + 1
-            use dasu("  ok")
-        } else {
-            set failed = failed + 1
-            use dasu("  FAILED (build error)")
         }
         set i += 1
     }
     use dasu("")
     set status = "ok" :str mut
     if failed > 0 { set status = "FAILED" }
-    use dasu("test result: " + status + ". " + str(passed) + " passed; " + str(failed) + " failed; " + str(total) + " total")
+    use dasu("test result: " + status + ". " + str(passed) + " passed; " + str(failed) + " failed; " + str(ran) + " total")
 }
 
 extern fn rt_vec_get_str: (list :&vec[str], index :i64) :str lib "c"
