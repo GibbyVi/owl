@@ -1,7 +1,8 @@
 [project]
 name = "owl"
-version = "0.13.2"
+version = "0.14.0"
 entry = "code/main.mire"
 
-[dependencies.testlib]
-path = "./tests/lib"
+[dependencies]
+kioto = { path = "../kioto" }
+testlib = { path = "./tests/lib" }

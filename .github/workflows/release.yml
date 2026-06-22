@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: linux-aarch64
+          - os: macos-13
+            target: darwin-x86_64
+          - os: macos-14
+            target: darwin-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Build mire compiler
+        run: |
+          git clone --depth 1 -b avenys/mire \
+            https://github.com/mire-lang/Avenys-rust.git /tmp/mire-src
+          cd /tmp/mire-src && cargo build --release
+
+      - name: Fetch kioto standard library
+        run: |
+          git clone --depth 1 https://github.com/mire-lang/libs.git /tmp/libs
+          ln -sfn /tmp/libs/kioto /tmp/kioto
+
+      - name: Build owl
+        run: |
+          /tmp/mire-src/target/release/mire build --release \
+            --owl-home /tmp/libs -o /tmp/owl-bin/owl
+
+      - name: Package tarball
+        run: |
+          mkdir -p /tmp/archive
+          cp /tmp/mire-src/target/release/mire /tmp/archive/
+          cp /tmp/owl-bin/owl /tmp/archive/
+          cd /tmp/archive
+          tar czf "${{ github.workspace }}/owl-${{ matrix.target }}.tar.gz" \
+            mire owl
+          cd "${{ github.workspace }}"
+          shasum -a 256 "owl-${{ matrix.target }}.tar.gz" \
+            > "owl-${{ matrix.target }}.tar.gz.sha256"
+
+      - name: Upload artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            owl-${{ matrix.target }}.tar.gz
+            owl-${{ matrix.target }}.tar.gz.sha256

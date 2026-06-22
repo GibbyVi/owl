@@ -1,5 +1,40 @@
 # Owl Changelog
 
+## [0.14.0] - 2026-06-22
+
+### Added
+- Pacman-style short flags: `-B` (build), `-T` (test), `-K` (check), `-D` (debug),
+  `-N` (new), `-C` (clean), `-Q` (info/query), `-S` (sync), `-R` (remove/drop),
+  `-V` (version), `-h` (help)
+- Subflag support: `-Si`, `-Qi`, `-Syu`, `-Cc`, `-Rs` with delegation to
+  existing commands
+- Help output documents both long and short command forms
+
+### Changed
+- Test runner rewritten: compiles and executes each `.mire` file independently
+  instead of generating a harness via `#!cfg::test` directives
+- Test discovery skips `lib/` subdirectories automatically
+- `owl info` redesigned: shows live compiler version, target arch, profile
+  settings from `owl.toml` build section, registered packages
+- Help output redesigned with pacman-style flag reference
+
+### Fixed
+- Infinite loop in recursive file walker (`find_mire_files`) caused by
+  trailing newlines in directory queue
+- `owl info` hang (120s+) when `tests/` directory contained `lib/`
+  subdirectory with dot-mire files
+- Test runner now correctly resolves binary names from nested test paths
+  (e.g., `tests/smoke.mire` -> `bin/debug/smoke`)
+- `owl.toml` dependency format corrected: uses inline table syntax for
+  path dependencies (`testlib = { path = "./tests/lib" }`)
+- Build cache invalidation: stale binaries no longer served after source
+  changes when `.cache/` directory is cleared
+
+### Test suite
+- 10/10 tests pass: primitives, control flow, functions, strings, lists,
+  math, stress, bugs, smoke, verify setup
+- Test runner verifies compile + execute for each file
+
 ## [0.13.2] - 2026-05-25
 
 ### Added

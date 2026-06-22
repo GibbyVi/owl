@@ -1,16 +1,10 @@
 # Owl
 
-Package & project manager for the [Mire](https://github.com/mire-lang) (Avenys) language.
+Package and project manager for the [Mire](https://github.com/mire-lang) (Avenys) language.
+Written in Mire, compiled by Avenys.
 
-Owl provides project scaffolding, compilation orchestration, static analysis, test execution, and build profiling — all offline with no external dependencies.
-
-## Installation
-
-```bash
-curl -fsSL https://github.com/mire-lang/owl/releases/latest/download/install.sh | bash
-```
-
-For an auditable flow: download `install-review.sh`, inspect it, then run.
+Owl provides project scaffolding, compilation orchestration, static analysis,
+test execution, package management, and build profiling.
 
 ## Quick Start
 
@@ -22,22 +16,89 @@ owl run
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `new <name>` | Scaffold a new project |
-| `run [file]` | Compile and execute |
-| `build [file]` | Compile only |
-| `check [file]` | Static analysis with warnings |
-| `profile` | Build/profile metrics |
-| `test [filter]` | Run test suite |
-| `clean` | Remove artifacts |
-| `info` | Project information |
+### Build (pacman-style flags available)
+
+| Short | Command        | Description |
+|-------|---------------|-------------|
+| `-B`  | `build`       | Compile project to binary |
+|       | `run`         | Compile and execute |
+| `-K`  | `check`       | Static analysis with warnings |
+| `-T`  | `test`        | Run test suite |
+| `-D`  | `debug`       | Debug build with IR emission |
+
+### Project
+
+| Short | Command        | Description |
+|-------|---------------|-------------|
+| `-N`  | `new <name>`  | Scaffold a new project |
+|       | `add <name>`  | Add dependency to owl.toml |
+| `-C`  | `clean`       | Remove build artifacts and cache |
+|       | `profile`     | Build/profile metrics |
+| `-Q`  | `info [pkg]`  | Project or package information |
+
+### Package (pacman-style)
+
+| Flag  | Action                     |
+|-------|----------------------------|
+| `-S`  | Sync package from registry |
+| `-Ss` | Search packages            |
+| `-Si` | Show package details       |
+| `-Syu`| Sync and upgrade all       |
+| `-R`  | Remove package             |
+| `-Rs` | Remove + delete installed  |
+| `-Qi` | Query installed package    |
+| `-Ql` | List installed files       |
+
+### Global
+
+| Flag  | Description |
+|-------|-------------|
+| `-V`  | Show version |
+| `-h`  | Show help    |
+
+## Build profiles
+
+```bash
+owl build --release -O3          # Release mode, max optimization
+owl run -r -Os                   # Release, size optimization
+owl check --all --strict          # Full static analysis
+owl test --filter smoke           # Run matching tests only
+```
+
+## Project structure
+
+```
+myproject/
+  owl.toml          -- Project manifest
+  code/main.mire    -- Entry point
+  tests/            -- Test files
+  bin/
+    debug/          -- Debug binaries
+    release/        -- Release binaries
+    .cache/         -- Build cache
+```
+
+## owl.toml
+
+```toml
+[project]
+name = "myproject"
+version = "0.1.0"
+entry = "code/main.mire"
+
+[dependencies]
+kioto = { path = "../kioto" }
+
+[build]
+default_profile = "debug"
+default_opt_level = "0"
+```
 
 ## Documentation
 
-- [Changelog](docs/changelog.md) — release history
-- [Technical notes](docs/technical.md) — architecture overview
-- [Roadmap](docs/roadmap.md) — planned features
+- [Changelog](docs/changelog.md) -- release history
+- [Technical notes](docs/technical.md) -- architecture overview
+- [Roadmap](docs/roadmap.md) -- planned features
 
 ## License
 
