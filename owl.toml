@@ -1,7 +1,20 @@
 [project]
 name = "owl"
-version = "0.13.2"
+version = "0.14.0"
+description = "Package and project manager for the Mire (Avenys) language"
 entry = "code/main.mire"
 
-[dependencies.testlib]
-path = "./tests/lib"
+[build]
+compiler = "mire"
+profile = "debug"
+opt-level = 0
+
+[paths]
+sources = "code"
+tests = "tests"
+output = "bin"
+cache = "bin/.cache"
+
+[dependencies]
+kioto = { path = "../kioto" }
+testlib = { path = "./tests/lib" }

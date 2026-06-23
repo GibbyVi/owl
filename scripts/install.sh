@@ -1,39 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Owl installer (non-interactive)
-# Installs precompiled owl binary and optionally mire from GitHub Releases.
-
-OWL_REPO_DEFAULT="mire-lang/owl"
-MIRE_REPO_DEFAULT="mire-lang/Avenys-rust"
+# Owl & Mire installer
+# Builds both from source: mire (Rust) → owl (Mire compiled by mire)
 
 PREFIX="${PREFIX:-$HOME/.local}"
 BIN_DIR="${BIN_DIR:-$PREFIX/bin}"
-INSTALL_MIRE="0"
-OWL_VERSION="latest"
-MIRE_VERSION="latest"
-OWL_REPO="$OWL_REPO_DEFAULT"
-MIRE_REPO="$MIRE_REPO_DEFAULT"
+BUILD_DIR="${BUILD_DIR:-$(mktemp -d)}"
+KEEP_BUILD="${KEEP_BUILD:-0}"
+
+OWL_REPO="https://github.com/mire-lang/owl.git"
+MIRE_REPO="https://github.com/mire-lang/Avenys-rust.git"
+LIBS_REPO="https://github.com/mire-lang/libs.git"
+
+OWL_BRANCH="main"
+MIRE_BRANCH="main"
 
 usage() {
   cat <<USAGE
 Usage: install.sh [options]
 
 Options:
-  --prefix <path>         Install prefix (default: ~/.local)
-  --bin-dir <path>        Binary directory (default: <prefix>/bin)
-  --owl-version <tag>     Owl tag version (default: latest)
-  --mire-version <tag>    Mire tag version (default: latest)
-  --owl-repo <owner/repo> Owl GitHub repo (default: ${OWL_REPO_DEFAULT})
-  --mire-repo <owner/repo> Mire GitHub repo (default: ${MIRE_REPO_DEFAULT})
-  --with-mire             Install mire binary too
-  -h, --help              Show this help
+  --prefix <path>      Install prefix (default: ~/.local)
+  --bin-dir <path>     Binary directory (default: <prefix>/bin)
+  --build-dir <path>   Build workspace (default: temp dir)
+  --keep-build         Keep build directory after install
+  -h, --help           Show this help
 USAGE
 }
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "error: required command not found: $1" >&2
+    echo "  install: $2" >&2
     exit 1
   fi
 }
@@ -43,81 +42,26 @@ parse_args() {
     case "$1" in
       --prefix) PREFIX="$2"; BIN_DIR="$2/bin"; shift 2 ;;
       --bin-dir) BIN_DIR="$2"; shift 2 ;;
-      --owl-version) OWL_VERSION="$2"; shift 2 ;;
-      --mire-version) MIRE_VERSION="$2"; shift 2 ;;
-      --owl-repo) OWL_REPO="$2"; shift 2 ;;
-      --mire-repo) MIRE_REPO="$2"; shift 2 ;;
-      --with-mire) INSTALL_MIRE="1"; shift ;;
+      --build-dir) BUILD_DIR="$2"; KEEP_BUILD=1; shift 2 ;;
+      --keep-build) KEEP_BUILD=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) echo "error: unknown option: $1" >&2; usage; exit 1 ;;
     esac
   done
 }
 
-platform() {
-  local os arch
-  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch="$(uname -m)"
-
-  case "$os" in
-    linux) os="linux" ;;
-    darwin) os="darwin" ;;
-    *) echo "error: unsupported OS: $os" >&2; exit 1 ;;
-  esac
-
-  case "$arch" in
-    x86_64|amd64) arch="x86_64" ;;
-    aarch64|arm64) arch="aarch64" ;;
-    *) echo "error: unsupported arch: $arch" >&2; exit 1 ;;
-  esac
-
-  printf '%s-%s' "$os" "$arch"
-}
-
-download_asset() {
-  local repo="$1" version="$2" asset="$3" out="$4"
-  local url
-
-  if [[ "$version" == "latest" ]]; then
-    url="https://github.com/${repo}/releases/latest/download/${asset}"
-  else
-    url="https://github.com/${repo}/releases/download/${version}/${asset}"
+cleanup() {
+  if [[ "$KEEP_BUILD" != "1" && -n "${BUILD_DIR:-}" ]]; then
+    rm -rf "$BUILD_DIR"
   fi
-
-  echo "-> downloading ${repo}:${version} (${asset})"
-  curl -fL "$url" -o "$out"
-}
-
-install_tar_binary() {
-  local tarball="$1" bin_name="$2" target="$3"
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-  tar -xzf "$tarball" -C "$tmpdir"
-
-  if [[ -f "$tmpdir/$bin_name" ]]; then
-    install -m 0755 "$tmpdir/$bin_name" "$target"
-  else
-    local found
-    found="$(find "$tmpdir" -type f -name "$bin_name" | head -n 1 || true)"
-    if [[ -z "$found" ]]; then
-      echo "error: binary ${bin_name} not found in tarball" >&2
-      rm -rf "$tmpdir"
-      exit 1
-    fi
-    install -m 0755 "$found" "$target"
-  fi
-
-  rm -rf "$tmpdir"
 }
 
 setup_owl_dirs() {
   local owl_home="$HOME/.owl"
-  mkdir -p "$owl_home/modules"
-  mkdir -p "$owl_home/tmp"
+  mkdir -p "$owl_home/modules" "$owl_home/tmp"
 
   if [[ ! -f "$owl_home/config.toml" ]]; then
     cat > "$owl_home/config.toml" << 'CONFIG'
-# Owl global configuration
 [owl]
 version = "1.0.0"
 
@@ -128,51 +72,119 @@ path = "$HOME/.owl/modules"
 timeout = 30
 retry = 3
 CONFIG
-    echo "created: $owl_home/config.toml"
+  fi
+}
+
+build_mire() {
+  local src="$1/mire-src"
+  echo ""
+  echo "==> building mire compiler (Rust)..."
+
+  if [[ -d "$src" ]]; then
+    echo "    updating existing clone..."
+    git -C "$src" pull --ff-only
+  else
+    git clone --depth 1 -b "$MIRE_BRANCH" "$MIRE_REPO" "$src"
   fi
 
-  echo "created: $owl_home/modules/"
-  echo "created: $owl_home/tmp/"
+  (cd "$src" && cargo build --release 2>&1)
+
+  local binary="$src/target/release/mire"
+  if [[ ! -f "$binary" ]]; then
+    echo "error: mire binary not found at $binary" >&2
+    exit 1
+  fi
+
+  echo "    mire built: $binary"
+  MIRE_BIN="$binary"
+}
+
+setup_kioto() {
+  local dst="$1/libs"
+  echo ""
+  echo "==> fetching kioto standard library..."
+
+  if [[ -d "$dst" ]]; then
+    git -C "$dst" pull --ff-only
+  else
+    git clone --depth 1 "$LIBS_REPO" "$dst"
+  fi
+
+  # Symlink so ../kioto resolves from the owl project root
+  ln -sfn "$dst/kioto" "$1/kioto"
+}
+
+build_owl() {
+  local src="$1/owl"
+  echo ""
+  echo "==> building owl (with mire)..."
+
+  if [[ -d "$src" ]]; then
+    git -C "$src" pull --ff-only
+  else
+    git clone --depth 1 -b "$OWL_BRANCH" "$OWL_REPO" "$src"
+  fi
+
+  local mire="$MIRE_BIN"
+  local owl_home="$1/libs"
+
+  (cd "$src" && "$mire" build --release --owl-home "$owl_home" -o "$src/owl" 2>&1)
+
+  local binary="$src/owl"
+  if [[ ! -f "$binary" ]]; then
+    echo "error: owl binary not found at $binary" >&2
+    ls -la "$src/" >&2
+    exit 1
+  fi
+
+  echo "    owl built: $binary"
+  OWL_BIN="$binary"
+}
+
+install_binaries() {
+  mkdir -p "$BIN_DIR"
+
+  echo ""
+  echo "==> installing..."
+
+  install -m 0755 "$MIRE_BIN" "$BIN_DIR/mire"
+  echo "    installed: $BIN_DIR/mire"
+
+  install -m 0755 "$OWL_BIN" "$BIN_DIR/owl"
+  echo "    installed: $BIN_DIR/owl"
 }
 
 main() {
   parse_args "$@"
-  require_cmd curl
-  require_cmd tar
-  require_cmd install
+
+  require_cmd git "git (https://git-scm.com)"
+  require_cmd cargo "rust/cargo (https://rustup.rs)"
+  require_cmd clang "clang (https://clang.llvm.org)"
+  require_cmd install "(coreutils)"
+
+  trap cleanup EXIT
 
   setup_owl_dirs
 
-  mkdir -p "$BIN_DIR"
-  local plat tmp
-  plat="$(platform)"
-  tmp="$(mktemp -d)"
+  build_mire "$BUILD_DIR"
+  setup_kioto "$BUILD_DIR"
+  build_owl "$BUILD_DIR"
+  install_binaries
 
-  local owl_asset mire_asset
-  owl_asset="owl-${plat}.tar.gz"
-  mire_asset="mire-${plat}.tar.gz"
-
-  download_asset "$OWL_REPO" "$OWL_VERSION" "$owl_asset" "$tmp/$owl_asset"
-  install_tar_binary "$tmp/$owl_asset" "owl" "$BIN_DIR/owl"
-
-  if [[ "$INSTALL_MIRE" == "1" ]]; then
-    download_asset "$MIRE_REPO" "$MIRE_VERSION" "$mire_asset" "$tmp/$mire_asset"
-    install_tar_binary "$tmp/$mire_asset" "mire" "$BIN_DIR/mire"
-  fi
-
-  rm -rf "$tmp"
-
-  echo "installed: $BIN_DIR/owl"
-  if [[ "$INSTALL_MIRE" == "1" ]]; then
-    echo "installed: $BIN_DIR/mire"
-  fi
+  echo ""
+  echo "=== owl + mire installed ==="
+  echo "  mire: $BIN_DIR/mire"
+  echo "  owl:  $BIN_DIR/owl"
+  echo ""
+  "$BIN_DIR/mire" --version
+  "$BIN_DIR/owl" info
 
   case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *)
-      echo
+      echo ""
       echo "warning: $BIN_DIR is not in PATH"
-      echo "add this line to your shell profile:"
+      echo "add this to your shell profile:"
       echo "  export PATH=\"$BIN_DIR:\$PATH\""
       ;;
   esac
