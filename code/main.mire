@@ -260,11 +260,6 @@ fn scan_test_functions: (path :str) :str {
         }
         set i += 1
     }
-    if result == "" {
-        if strings::contains(content "pub fn main") {
-            set result = path + "|main"
-        }
-    }
     return result
 }
 
@@ -374,7 +369,8 @@ pub fn run_tests: (filter :str compiler_cmd :str) {
     use dasu("")
     use dasu("== owl test ==")
     use dasu("")
-    set test_dir = "tests"
+    set test_dir = toml_get("owl.toml" "paths" "tests") :str mut
+    if test_dir == "" { set test_dir = "tests" }
     if !fs_exists(test_dir) {
         use dasu("Error: '" + test_dir + "' not found")
         return
@@ -813,38 +809,35 @@ fn check_print_warning_summary: (file :str out :str strict :str) :str {
 }
 
 fn compile_pipeline: (args :vec[str] is_run :bool) {
-    set default_entry = "code/main.mire" :str mut
-    if has_project() {
-        set entry = toml_get("owl.toml" "project" "entry")
-        if entry != "" { set default_entry = entry }
-    }
-    set file = default_entry :str mut
-    set profile = toml_get("owl.toml" "build" "profile") :str mut
-    if profile == "" { set profile = "debug" }
-    set opt = toml_get("owl.toml" "build" "opt-level") :str mut
-    if opt == "" { set opt = "0" }
+    # All configuration from owl.toml — no hardcoded defaults.
     set mire = compiler_cmd()
+    set is_proj = has_project()
+
+    # Parse CLI flags first
     set n = rt_vec_len(args)
     set i = 2 :i64 mut
+    set cli_file = "" :str mut
+    set cli_profile = "" :str mut
+    set cli_opt = "" :str mut
     while i < n {
         set a = rt_vec_get_str(args i)
         if a == "--debug" || a == "-d" {
-            set profile = "debug"
-            set opt = "0"
+            set cli_profile = "debug"
+            set cli_opt = "0"
         } else {
             if a == "--release" || a == "-r" {
-                set profile = "release"
-                set opt = "3"
+                set cli_profile = "release"
+                set cli_opt = "3"
             } else {
                 if a == "-O" || a == "--opt-level" {
                     set i += 1
-                    if i < n { set opt = rt_vec_get_str(args i) }
+                    if i < n { set cli_opt = rt_vec_get_str(args i) }
                 } else {
                     if strings::startswith(a "-O") && len(a) > 2 {
-                        set opt = strings::replace(a "-O" "")
+                        set cli_opt = strings::replace(a "-O" "")
                     } else {
-                        if !strings::startswith(a "-") && file == default_entry {
-                            set file = a
+                        if !strings::startswith(a "-") && cli_file == "" {
+                            set cli_file = a
                         }
                     }
                 }
@@ -853,39 +846,87 @@ fn compile_pipeline: (args :vec[str] is_run :bool) {
         set i += 1
     }
 
-    set is_proj = has_project()
     if !is_proj {
-        use warn_line("OWL0001" "no project found; using local .cache and bin/")
+        # Standalone file — delegate directly to mire
+        if cli_file == "" {
+            if n > 2 { set cli_file = rt_vec_get_str(args 2) }
+            if n > 1 { set cli_file = rt_vec_get_str(args 1) }
+        }
+        if cli_file == "" {
+            use error_line("OWL0002" "no file specified and no owl.toml found")
+            return
+        }
+        set cmd = mire :str mut
+        if is_run { set cmd = cmd + " run " + cli_file } else { set cmd = cmd + " build " + cli_file }
+        if cli_profile == "release" { set cmd = cmd + " --release" } else { set cmd = cmd + " --debug" }
+        if cli_opt != "" { set cmd = cmd + " -O " + cli_opt }
+        set out = proc_run(cmd)
+        use dasu(out)
+        return
     }
 
-    if file == "" { set file = default_entry }
+    # Project mode — read everything from owl.toml
+    set entry = toml_get("owl.toml" "project" "entry")
+    if entry == "" {
+        use error_line("OWL0003" "owl.toml: [project].entry is required")
+        return
+    }
+    set file = entry :str mut
+    if cli_file != "" { set file = cli_file }
+
+    set profile = toml_get("owl.toml" "build" "profile") :str mut
+    if profile == "" { set profile = "debug" }
+    set opt = toml_get("owl.toml" "build" "opt-level") :str mut
+    if opt == "" { set opt = "0" }
+    if cli_profile != "" { set profile = cli_profile }
+    if cli_opt != "" { set opt = cli_opt }
+
+    set out_dir = toml_get("owl.toml" "paths" "output") :str mut
+    if out_dir == "" { set out_dir = "bin" }
+    set cache_dir = toml_get("owl.toml" "paths" "cache") :str mut
+    if cache_dir == "" { set cache_dir = "bin/.cache" }
+
     if !fs_exists(file) {
         use error_line("OWL0002" "input not found: " + file)
         return
     }
 
-    if is_proj {
-        use mkdir_p("bin/.cache")
-        use mkdir_p("bin")
-    } else {
-        use mkdir_p(".cache")
-        use mkdir_p("bin")
+    use mkdir_p(cache_dir)
+    use mkdir_p(out_dir)
+
+    # Re-read out_dir from config since it was consumed by mkdir_p
+    set out_dir2 = toml_get("owl.toml" "paths" "output") :str mut
+    if out_dir2 == "" { set out_dir2 = "bin" }
+
+    set build_cmd = mire :str mut
+    set build_cmd = build_cmd + " build " + file
+    if profile == "release" { set build_cmd = build_cmd + " --release" } else { set build_cmd = build_cmd + " --debug" }
+    set build_cmd = build_cmd + " -O " + opt
+    use dasu("  [" + profile + " -O" + opt + "]")
+
+    if !is_run {
+        set out = proc_run(build_cmd)
+        use dasu(out)
+        return
     }
 
-    if is_run {
-        set bin_path = "bin/main"
-        if fs_exists(bin_path) {
-            use dasu(proc_run(bin_path))
-            return
-        }
-    }
+    # is_run: build first, then spawn + wait binary
+    set build_out = proc_run(build_cmd)
+    use dasu(build_out)
 
-    set cmd = mire :str mut
-    if is_run { set cmd = cmd + " run " + file } else { set cmd = cmd + " build " + file }
-    if profile == "release" { set cmd = cmd + " --release" } else { set cmd = cmd + " --debug" }
-    set cmd = cmd + " -O " + opt
-    set out = proc_run(cmd)
-    use dasu(out)
+    # Compute binary path
+    set name = entry :str mut
+    if strings::endswith(name ".mire") {
+        set name = strings::replace(name ".mire" "")
+    }
+    set parts = strings::split(name "/")
+    set name = rt_vec_get_str(parts rt_vec_len(parts) - 1)
+    set bin = "./" + out_dir2 + "/" + profile + "/" + name :str mut
+
+    use dasu("")
+    proc::spawn_shell("echo \"  running " + bin + " ...\"")
+    set pid = proc::spawn_shell(bin)
+    proc::wait(pid)
 }
 
 fn cmd_new: (name :str) {
