@@ -353,7 +353,7 @@ extern fn rt_vec_len: (list :&vec[str]) :i64 lib "c"
 extern fn rt_string_to_i64: (value :str) :i64 lib "c"
 extern fn rt_i64_to_string: (value :i64) :str lib "c"
 
-fn owl_version: () :str { return "0.14.0" }
+fn owl_version: () :str { return "0.14.1" }
 fn compiler_version: () :str {
     set v = strings::trim(proc_run("mire --version"))
     if v != "" { return v }
