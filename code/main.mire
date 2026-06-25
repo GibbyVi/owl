@@ -156,10 +156,10 @@ pub fn error_line: (tag :str msg :str) {
     use dasu("error[" + tag + "] " + msg)
 }
 
-pub fn profile_record: (_file :str _profile :str _opt :str _started_ms :i64 _finished_ms :i64 _cache_hit :bool) {
+pub fn _profile_record: (_file :str _profile :str _opt :str _started_ms :i64 _finished_ms :i64 _cache_hit :bool) {
 }
 
-pub fn profile_record_check: (_file :str _warn_total :str _lifecycle_total :str _strict_failed :bool) {
+pub fn _profile_record_check: (_file :str _warn_total :str _lifecycle_total :str _strict_failed :bool) {
 }
 
 pub fn profile_show: (_as_json :bool _show_history :bool _compare :bool) {
@@ -287,7 +287,7 @@ fn scan_all_tests: (dir :str) :str {
     return result
 }
 
-fn build_test_harness: (test_data :str filter :str) :str {
+fn _build_test_harness: (test_data :str filter :str) :str {
     set records = strings::split(test_data "\n")
     set total = len(records)
     set loads = "" :str mut
@@ -514,7 +514,7 @@ fn ensure_owl_home: () {
 }
 
 fn registry_dir: () :str { return owl_root() + "/registry" }
-fn store_dir: () :str { return owl_root() + "/store" }
+fn _store_dir: () :str { return owl_root() + "/store" }
 fn sync_tmp_dir: () :str { return owl_root() + "/tmp" }
 
 fn current_build: () :str {
@@ -573,7 +573,7 @@ fn registry_list: () :str {
     return result
 }
 
-fn list_subdirs: (dir :str) :str {
+fn _list_subdirs: (dir :str) :str {
     if !fs_exists(dir) { return "" }
     set entries = fs_list(dir)
     set n = rt_vec_len(entries)
