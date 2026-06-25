@@ -891,16 +891,37 @@ fn compile_pipeline: (args :vec[str] is_run :bool) {
         return
     }
 
+    # Precompute binary stem before dirs are consumed
+    set stem = file :str mut
+    if strings::endswith(stem ".mire") {
+        set stem = strings::replace(stem ".mire" "")
+    }
+    set parts = strings::split(stem "/")
+    set exe_name = rt_vec_get_str(parts rt_vec_len(parts) - 1)
+    set exe_path = "./" + out_dir + "/" + profile + "/" + exe_name :str mut
+
     use mkdir_p(cache_dir)
     use mkdir_p(out_dir)
 
-    set cmd = mire :str mut
-    if is_run { set cmd = cmd + " run " + file } else { set cmd = cmd + " build " + file }
-    if profile == "release" { set cmd = cmd + " --release" } else { set cmd = cmd + " --debug" }
-    set cmd = cmd + " -O " + opt
+    set build_cmd = mire :str mut
+    set build_cmd = build_cmd + " build " + file
+    if profile == "release" { set build_cmd = build_cmd + " --release" } else { set build_cmd = build_cmd + " --debug" }
+    set build_cmd = build_cmd + " -O " + opt
     use dasu("  [" + profile + " -O" + opt + "]")
-    set out = proc_run(cmd)
-    use dasu(out)
+
+    if !is_run {
+        set out = proc_run(build_cmd)
+        use dasu(out)
+        return
+    }
+
+    # is_run: build first, then spawn binary without capturing stdout
+    set build_out = proc_run(build_cmd)
+    use dasu(build_out)
+
+    use dasu("")
+    use dasu("  running ...")
+    proc::spawn_shell(exe_path)
 }
 
 fn cmd_new: (name :str) {
