@@ -84,21 +84,37 @@ myproject/
 [project]
 name = "myproject"
 version = "0.1.0"
+description = ""
 entry = "code/main.mire"
 
-[dependencies]
-kioto = { path = "../kioto" }
-
 [build]
-default_profile = "debug"
-default_opt_level = "0"
+compiler = "mire"
+profile = "debug"
+opt-level = 0
+
+[paths]
+sources = "code"
+tests = "tests"
+output = "bin"
+cache = "bin/.cache"
+
+[dependencies]
 ```
 
 ## Documentation
 
-- [Changelog](docs/changelog.md) -- release history
-- [Technical notes](docs/technical.md) -- architecture overview
-- [Roadmap](docs/roadmap.md) -- planned features
+- [Changelog](docs/changelog.md) — release history
+- [Technical notes](docs/technical.md) — architecture overview
+- [Roadmap](docs/roadmap.md) — planned features
+
+## Recent changes (v0.14.0)
+
+- **De-hardcoded config:** All paths (`entry`, `profile`, `opt-level`, `tests`, `output`, `cache`)
+  now read exclusively from `owl.toml`. Missing fields produce errors instead of silent fallbacks.
+- **Removed `bin/main` shortcut:** `owl run` always delegates to `mire run`, using MIR's
+  incremental cache for fast recompilation.
+- **Standalone files:** Running `owl run file.mire` without a project delegates directly to
+  `mire run file.mire`.
 
 ## License
 
