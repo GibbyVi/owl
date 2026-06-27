@@ -509,6 +509,149 @@ fn cmd_check: (args :vec[str]) {
     }
 }
 
+fn cmd_info: (args :vec[str]) {
+    set has_proj = has_project()
+
+    if has_proj {
+        set n = toml_get("owl.toml" "project" "name") :str mut
+        if n == "" { set n = "?" }
+        set v = toml_get("owl.toml" "project" "version") :str mut
+        if v == "" { set v = "?" }
+        set e = toml_get("owl.toml" "project" "entry") :str mut
+        if e == "" { set e = "?" }
+        set p = toml_get("owl.toml" "build" "profile") :str mut
+        if p == "" { set p = "?" }
+        set o = toml_get("owl.toml" "paths" "output") :str mut
+        if o == "" { set o = "?" }
+        set c = toml_get("owl.toml" "paths" "cache") :str mut
+        if c == "" { set c = "?" }
+
+        use dasu("project:     " + n + " v" + v)
+        use dasu("entry:       " + e)
+        use dasu("profile:     " + p)
+        use dasu("output:      " + o + "/" + p)
+        use dasu("cache:       " + c)
+
+        set arch = strings::trim(proc_run("uname -m 2>/dev/null || true"))
+        set kernel = strings::trim(proc_run("uname -s | tr '[:upper:]' '[:lower:]' 2>/dev/null || true"))
+        if arch != "" && kernel != "" {
+            use dasu("target:      " + arch + "-" + kernel)
+        } else {
+            use dasu("target:      ?")
+        }
+
+        use dasu("")
+    }
+
+    set compiler_out = strings::trim(proc_run("mire --version 2>/dev/null || true"))
+    set compiler_line = "?" :str mut
+    if compiler_out != "" {
+        set clines = strings::split(compiler_out "\n")
+        set compiler_line = lists::get(clines 0)
+    }
+    use dasu("compiler:    " + compiler_line)
+    use dasu("owl:         v" + owl_version())
+
+    set llvm = strings::trim(proc_run("llvm-config --version 2>/dev/null || true")) :str mut
+    if llvm == "" {
+        set llvm = "?"
+    }
+    use dasu("LLVM:        " + llvm)
+    use dasu("language:    Mire")
+    use dasu("abi:         1")
+
+    if has_proj {
+        use dasu("")
+        set content = fs_read("owl.toml")
+        set lines = strings::split(content "\n")
+        set nl = len(lines)
+
+        use dasu("dependencies:")
+
+        set in_deps = false :bool mut
+        set found_any = false :bool mut
+        set i = 0 :i64 mut
+        while i < nl {
+            set rline = lists::get(lines i)
+            set line = strings::trim(rline)
+
+            set parts_hash = strings::split(line "#")
+            set clean = strings::trim(lists::get(parts_hash 0))
+
+            if clean != "" {
+                set parts_br = strings::split(clean "[")
+                if len(parts_br) >= 2 {
+                    set close = strings::split(lists::get(parts_br 1) "]")
+                    if len(close) >= 1 {
+                        set sec = strings::trim(lists::get(close 0))
+                        if sec == "dependencies" {
+                            set in_deps = true
+                        } else {
+                            if in_deps { break }
+                        }
+                    }
+                } else {
+                    if in_deps {
+                        set kv = strings::split(clean "=")
+                        if len(kv) >= 2 {
+                            set key = strings::trim(lists::get(kv 0))
+                            set raw_val = lists::get(kv 1) :str mut
+                            set j = 2 :i64 mut
+                            while j < len(kv) {
+                                set raw_val = raw_val + "=" + lists::get(kv j)
+                                set j += 1
+                            }
+
+                            set ver_s = "-" :str mut
+                            set src_s = "?" :str mut
+
+                            set tbl = strings::trim(raw_val) :str mut
+                            if strings::startswith(tbl "{") {
+                                set tbl = strings::substr(tbl 1 len(tbl) - 1)
+                            }
+                            if strings::endswith(tbl "}") {
+                                set tbl = strings::substr(tbl 0 len(tbl) - 1)
+                            }
+                            set tbl = strings::trim(tbl)
+
+                            set fields = strings::split(tbl ",")
+                            set fi = 0 :i64 mut
+                            while fi < len(fields) {
+                                set f = strings::trim(lists::get(fields fi))
+                                set fkv = strings::split(f "=")
+                                if len(fkv) >= 2 {
+                                    set fk = strings::trim(lists::get(fkv 0))
+                                    set fv_r = lists::get(fkv 1) :str mut
+                                    set kk = 2 :i64 mut
+                                    while kk < len(fkv) {
+                                        set fv_r = fv_r + "=" + lists::get(fkv kk)
+                                        set kk += 1
+                                    }
+                                    set fv = strings::trim(fv_r) :str mut
+                                    if strings::startswith(fv "\"") && strings::endswith(fv "\"") {
+                                        set fv = strings::substr(fv 1 len(fv) - 2)
+                                    }
+                                    if fk == "version" { set ver_s = fv }
+                                    if fk == "path" { set src_s = fv }
+                                }
+                                set fi += 1
+                            }
+
+                            set found_any = true
+                            use dasu("  " + key + "  " + ver_s + "  (" + src_s + ")")
+                        }
+                    }
+                }
+            }
+            set i += 1
+        }
+
+        if !found_any {
+            use dasu("  (none)")
+        }
+    }
+}
+
 fn cmd_clean: (args :vec[str]) {
     set clean_bin = false :bool mut
     set clean_cache = false :bool mut
@@ -579,6 +722,7 @@ fn print_help: () {
     use dasu("  checkup            validate owl.toml and environment")
     use dasu("  checkup --fix      regenerate owl.toml with defaults")
     use dasu("  check             validate dependencies and integrity")
+    use dasu("  info              show project and environment info")
     use dasu("")
     use dasu("Global:")
     use dasu("  -V, --version     Show version")
@@ -612,6 +756,7 @@ pub fn main: () {
     set a4 = args
     set a5 = args
     set a6 = args
+    set a7 = args
     if cmd == "-B" || cmd == "build" {
         compile_pipeline(a1 false)
         return
@@ -634,6 +779,10 @@ pub fn main: () {
     }
     if cmd == "check" {
         cmd_check(a6)
+        return
+    }
+    if cmd == "info" {
+        cmd_info(a7)
         return
     }
     if cmd == "-C" || cmd == "clean" {
