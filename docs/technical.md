@@ -1,6 +1,6 @@
 # Owl Technical Notes
 
-## Architecture (v0.14.0)
+## Architecture (v0.16.0)
 
 ### CLI core
 - Entrypoint: `code/main.mire` (~1530 lines)
@@ -70,8 +70,9 @@ Owl relies on compiler built-ins (not kioto imports):
 - `owl clean --bin` removes `bin/`
 - `owl clean --all` removes both plus `deps/` and `_test_harness.mire`
 
-### Current scope (v0.14.0)
-- Project management: `new`, `run`, `build`, `test`, `clean`, `info`, `check`, `profile`
+### Current scope (v0.16.0)
+- Project management: `new`, `run`, `build`, `test`, `clean`, `info`, `check`, `checkup`, `profile`
+- `checkup` validates all 11 owl.toml fields and dependency count
 - Package management: `add`, `import-repo`, `sync`, `drop`, `verify`
 - Pacman-style short flags for all primary commands
 - Offline operation for all core commands

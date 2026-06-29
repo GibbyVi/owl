@@ -321,6 +321,30 @@ fn cmd_checkup: (args :vec[str]) {
     if has_project() {
         set toml_valid = true :bool mut
 
+        set name = toml_get("owl.toml" "project" "name")
+        if name == "" {
+            use dasu("  [FAIL] [project].name: missing")
+            set toml_valid = false
+        } else {
+            use dasu("  [OK]   [project].name: " + name)
+        }
+
+        set ver = toml_get("owl.toml" "project" "version")
+        if ver == "" {
+            use dasu("  [FAIL] [project].version: missing")
+            set toml_valid = false
+        } else {
+            use dasu("  [OK]   [project].version: " + ver)
+        }
+
+        set desc = toml_get("owl.toml" "project" "description")
+        if desc == "" {
+            use dasu("  [FAIL] [project].description: missing")
+            set toml_valid = false
+        } else {
+            use dasu("  [OK]   [project].description: " + desc)
+        }
+
         set entry = toml_get("owl.toml" "project" "entry")
         if entry == "" {
             use dasu("  [FAIL] [project].entry: missing")
@@ -350,6 +374,13 @@ fn cmd_checkup: (args :vec[str]) {
             use dasu("  [OK]   [build].opt-level: " + opt)
         }
 
+        set compiler = toml_get("owl.toml" "build" "compiler")
+        if compiler == "" {
+            use dasu("  [WARN] [build].compiler: missing (will default to 'mire')")
+        } else {
+            use dasu("  [OK]   [build].compiler: " + compiler)
+        }
+
         set out_dir = toml_get("owl.toml" "paths" "output")
         if out_dir == "" {
             use dasu("  [FAIL] [paths].output: missing")
@@ -368,6 +399,72 @@ fn cmd_checkup: (args :vec[str]) {
             } else {
                 use dasu("  [WARN] [paths].cache: " + cache_dir + "  ->  will be created on next build")
             }
+        }
+
+        set sources = toml_get("owl.toml" "paths" "sources")
+        if sources == "" {
+            use dasu("  [FAIL] [paths].sources: missing")
+            set toml_valid = false
+        } else {
+            if fs_exists(sources) {
+                use dasu("  [OK]   [paths].sources: " + sources + "  ->  exists")
+            } else {
+                use dasu("  [WARN] [paths].sources: " + sources + "  ->  will be created on next build")
+            }
+        }
+
+        set tests = toml_get("owl.toml" "paths" "tests")
+        if tests == "" {
+            use dasu("  [FAIL] [paths].tests: missing")
+            set toml_valid = false
+        } else {
+            if fs_exists(tests) {
+                use dasu("  [OK]   [paths].tests: " + tests + "  ->  exists")
+            } else {
+                use dasu("  [WARN] [paths].tests: " + tests + "  ->  will be created on next build")
+            }
+        }
+
+        # ── Dependencies ─────────────────────────────────────────────
+        use dasu("")
+        set content = fs_read("owl.toml")
+        set dep_lines = strings::split(content "\n")
+        set dl_n = len(dep_lines)
+        set in_deps = false :bool mut
+        set dep_count = 0 :i64 mut
+        set di = 0 :i64 mut
+        while di < dl_n {
+            set drline = lists::get(dep_lines di)
+            set dline = strings::trim(drline)
+            set dparts_hash = strings::split(dline "#")
+            set dclean = strings::trim(lists::get(dparts_hash 0))
+            if dclean != "" {
+                set dparts_br = strings::split(dclean "[")
+                if len(dparts_br) >= 2 {
+                    set dclose = strings::split(lists::get(dparts_br 1) "]")
+                    if len(dclose) >= 1 {
+                        set dsec = strings::trim(lists::get(dclose 0))
+                        if dsec == "dependencies" {
+                            set in_deps = true
+                        } else {
+                            if in_deps { set di = dl_n }
+                        }
+                    }
+                } else {
+                    if in_deps {
+                        set dkv = strings::split(dclean "=")
+                        if len(dkv) >= 2 {
+                            set dep_count += 1
+                        }
+                    }
+                }
+            }
+            set di += 1
+        }
+        if dep_count == 0 {
+            use dasu("  [WARN] [dependencies]: no dependencies configured")
+        } else {
+            use dasu("  [OK]   [dependencies]: " + rt_i64_to_string(dep_count) + " configured")
         }
 
         if !toml_valid {

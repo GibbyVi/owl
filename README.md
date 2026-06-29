@@ -33,6 +33,8 @@ owl run
 | `-N`  | `new <name>`  | Scaffold a new project |
 |       | `add <name>`  | Add dependency to owl.toml |
 | `-C`  | `clean`       | Remove build artifacts and cache |
+|       | `checkup`     | Validate all owl.toml fields and environment |
+|       | `checkup --fix` | Regenerate owl.toml with defaults preserving existing values |
 |       | `profile`     | Build/profile metrics |
 | `-Q`  | `info [pkg]`  | Project or package information |
 
@@ -107,8 +109,16 @@ cache = "bin/.cache"
 - [Technical notes](docs/technical.md) — architecture overview
 - [Roadmap](docs/roadmap.md) — planned features
 
-## Recent changes (v0.14.0)
+## Recent changes (v0.16.0)
 
+- **Full owl.toml validation:** `cmd_checkup` now validates all 11 fields
+  (`name`, `version`, `description`, `entry`, `profile`, `opt-level`,
+  `compiler`, `output`, `cache`, `sources`, `tests`) plus dependency counting.
+  Missing fields produce `[FAIL]` or `[WARN]` with clear messages.
+- **Dependency check:** `checkup` counts `[dependencies]` entries and reports
+  `[WARN]` if none configured.
+- **`checkup --fix`:** Regenerates `owl.toml` preserving all existing values,
+  only filling missing fields with defaults.
 - **De-hardcoded config:** All paths (`entry`, `profile`, `opt-level`, `tests`, `output`, `cache`)
   now read exclusively from `owl.toml`. Missing fields produce errors instead of silent fallbacks.
 - **Removed `bin/main` shortcut:** `owl run` always delegates to `mire run`, using MIR's

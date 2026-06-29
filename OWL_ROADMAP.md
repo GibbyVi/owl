@@ -264,32 +264,55 @@ owl build
 
 ### 3.11 `owl checkup` — qué comprueba
 
-`owl checkup` no es un comando de build ni de análisis de código. Es un diagnóstico del entorno y del proyecto:
+`owl checkup` no es un comando de build ni de análisis de código. Es un diagnóstico del proyecto y del entorno que valida **todos** los campos de `owl.toml`:
 
 ```
 owl checkup
   [OK]   mire: Mire / Avenys v3.11.35
 
+  [OK]   [project].name: myproject
+  [OK]   [project].version: 0.1.0
+  [OK]   [project].description: My awesome project
   [OK]   [project].entry: code/main.mire  ->  exists
   [OK]   [build].profile: debug
   [OK]   [build].opt-level: 0
+  [OK]   [build].compiler: mire
   [OK]   [paths].output: bin
   [OK]   [paths].cache: bin/.cache  ->  exists
+  [OK]   [paths].sources: code  ->  exists
+  [OK]   [paths].tests: tests  ->  exists
+
+  [OK]   [dependencies]: 3 configured
 
   [OK]   all checks passed
 ```
 
-Si faltan campos en `owl.toml`:
+Campos validados:
+
+| Sección | Campos | Comportamiento |
+|---------|--------|----------------|
+| `[project]` | `name`, `version`, `description`, `entry` | `[FAIL]` si faltan. `entry` además verifica que el archivo existe. |
+| `[build]` | `profile`, `opt-level`, `compiler` | `[FAIL]` si faltan `profile`/`opt-level`. `compiler` es `[WARN]` (defaults a `mire`). |
+| `[paths]` | `output`, `cache`, `sources`, `tests` | `[FAIL]` si faltan. `cache`/`sources`/`tests` muestran `[WARN]` si el directorio no existe (el build lo crea). |
+| `[dependencies]` | — | Cuenta las dependencias configuradas. `[WARN]` si no hay ninguna. |
+
+Si faltan campos:
 
 ```
 owl checkup
   [OK]   mire: Mire / Avenys v3.11.35
 
+  [FAIL] [project].name: missing
+  [FAIL] [project].version: missing
+  [FAIL] [project].description: missing
   [OK]   [project].entry: code/main.mire  ->  exists
   [FAIL] [build].profile: missing
   [FAIL] [build].opt-level: missing
-  [OK]   [paths].output: bin
-  [FAIL] [paths].cache: missing
+  [OK]   [build].compiler: mire
+  [FAIL] [paths].sources: missing
+  [FAIL] [paths].tests: missing
+
+  [WARN] [dependencies]: no dependencies configured
 
   [HINT] run 'checkup --fix' to repair owl.toml issues
 ```
@@ -304,7 +327,7 @@ Si el directorio de caché no existe:
 
 Esto no falla el check — el build lo crea automáticamente.
 
-Si `owl checkup` pasa sin errores, el entorno está en estado correcto para compilar e instalar.
+Si `owl checkup` pasa sin errores, el entorno está en estado correcto para compilar e instalar. Es el primer comando a ejecutar cuando algo no funciona.
 
 ### 3.12 `owl check` — qué comprueba
 

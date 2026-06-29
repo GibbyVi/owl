@@ -1,5 +1,25 @@
 # Owl Changelog
 
+## [0.16.0] - 2026-06-28
+
+### Added
+- Full `owl.toml` field validation in `checkup`: all 11 fields now checked
+  (`name`, `version`, `description`, `entry`, `profile`, `opt-level`,
+  `compiler`, `output`, `cache`, `sources`, `tests`)
+- Dependency count reporting: `checkup` counts `[dependencies]` entries
+  and warns if none configured
+- `checkup --fix` preserves all existing values when regenerating `owl.toml`
+
+### Changed
+- `checkup` output redesigned: shows every field with `[OK]`, `[FAIL]`, or `[WARN]`
+  instead of only showing failures
+- Non-existent source/test/cache directories show `[WARN]` instead of `[FAIL]`
+  (the build creates them automatically)
+
+### Fixed
+- `checkup` no longer silently omits project metadata fields
+- `checkup` correctly distinguishes missing fields from non-existent directories
+
 ## [0.14.0] - 2026-06-22
 
 ### Added

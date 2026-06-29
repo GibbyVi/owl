@@ -1,5 +1,14 @@
 # Owl Roadmap
 
+## Version 0.16.0 — Full owl.toml validation (current)
+
+- `owl checkup` validates all 11 fields: `name`, `version`, `description`,
+  `entry`, `profile`, `opt-level`, `compiler`, `output`, `cache`, `sources`, `tests`
+- `owl checkup` counts `[dependencies]` entries
+- `owl checkup --fix` regenerates `owl.toml` preserving existing values
+- `owl checkup` reports `[FAIL]` for missing required fields, `[WARN]` for
+  optional fields or non-existent directories (created on next build)
+
 ## Version 0.15.x -- Progress bars and kioto extensions
 
 - `term.bar` in kioto: `[===...]` style progress bars with ANSI colors
