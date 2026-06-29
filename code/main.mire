@@ -90,7 +90,7 @@ extern fn rt_vec_len: (list :&vec[str]) :i64 lib "c"
 extern fn rt_string_to_i64: (value :str) :i64 lib "c"
 extern fn rt_i64_to_string: (value :i64) :str lib "c"
 
-fn owl_version: () :str { return "0.16.0" }
+fn owl_version: () :str { return "0.16.1" }
 fn compiler_version: () :str {
     set v = strings::trim(proc_run("mire --version"))
     if v != "" { return v }
@@ -260,46 +260,67 @@ fn cmd_new: (name :str) {
     use dasu("Project created: " + n8)
 }
 
-fn regenerate_owl_toml: () {
+fn regenerate_owl_toml: (fields :str) {
     if !has_project() {
         use dasu("No owl.toml found in the current directory")
         return
     }
+
     set n = toml_get("owl.toml" "project" "name") :str mut
-    if n == "" { set n = "myproject" }
+    if n == "" && strings::contains(fields "name") { set n = "myproject" }
     set v = toml_get("owl.toml" "project" "version") :str mut
-    if v == "" { set v = "0.1.0" }
+    if v == "" && strings::contains(fields "version") { set v = "0.1.0" }
     set d = toml_get("owl.toml" "project" "description") :str mut
-    if d == "" { set d = "" }
+    if d == "" && strings::contains(fields "description") { set d = "" }
     set e = toml_get("owl.toml" "project" "entry") :str mut
-    if e == "" { set e = "code/main.mire" }
+    if e == "" && strings::contains(fields "entry") { set e = "code/main.mire" }
     set comp = toml_get("owl.toml" "build" "compiler") :str mut
-    if comp == "" { set comp = "mire" }
+    if comp == "" && strings::contains(fields "compiler") { set comp = "mire" }
     set p = toml_get("owl.toml" "build" "profile") :str mut
-    if p == "" { set p = "debug" }
+    if p == "" && strings::contains(fields "profile") { set p = "debug" }
     set o = toml_get("owl.toml" "build" "opt-level") :str mut
-    if o == "" { set o = "0" }
+    if o == "" && strings::contains(fields "opt-level") { set o = "0" }
     set src = toml_get("owl.toml" "paths" "sources") :str mut
-    if src == "" { set src = "code" }
+    if src == "" && strings::contains(fields "sources") { set src = "code" }
     set t = toml_get("owl.toml" "paths" "tests") :str mut
-    if t == "" { set t = "tests" }
+    if t == "" && strings::contains(fields "tests") { set t = "tests" }
     set out = toml_get("owl.toml" "paths" "output") :str mut
-    if out == "" { set out = "bin" }
+    if out == "" && strings::contains(fields "output") { set out = "bin" }
     set cache = toml_get("owl.toml" "paths" "cache") :str mut
-    if cache == "" { set cache = "bin/.cache" }
+    if cache == "" && strings::contains(fields "cache") { set cache = "bin/.cache" }
 
     use fs_write("owl.toml" "[project]\nname = \"" + n + "\"\nversion = \"" + v + "\"\ndescription = \"" + d + "\"\nentry = \"" + e + "\"\n\n[build]\ncompiler = \"" + comp + "\"\nprofile = \"" + p + "\"\nopt-level = " + o + "\n\n[paths]\nsources = \"" + src + "\"\ntests = \"" + t + "\"\noutput = \"" + out + "\"\ncache = \"" + cache + "\"\n\n[dependencies]\n")
-    use dasu("  [FIX]  owl.toml: regenerated - missing fields filled with defaults")
+    use dasu("  [FIX]  owl.toml: regenerated with defaults for: " + fields)
 }
 
 fn cmd_checkup: (args :vec[str]) {
     set do_fix = false :bool mut
+    set fix_fields = "" :str mut
     set n = rt_vec_len(args)
     set i = 2 :i64 mut
     while i < n {
         set a = rt_vec_get_str(args i)
-        if a == "--fix" { set do_fix = true }
+        if a == "--fix" {
+            set do_fix = true
+        } else {
+            if do_fix {
+                if fix_fields == "" {
+                    set fix_fields = a
+                } else {
+                    set fix_fields = fix_fields + " " + a
+                }
+            }
+        }
         set i += 1
+    }
+
+    if do_fix && fix_fields == "" {
+        use dasu("")
+        use dasu("  [HINT] usage: owl checkup --fix <field> [<field> ...]")
+        use dasu("         fields: name, version, description, entry, profile,")
+        use dasu("                 opt-level, compiler, output, cache, sources, tests")
+        use dasu("         example: owl checkup --fix name version entry profile")
+        set do_fix = false
     }
 
     set all_ok = true :bool mut
@@ -467,12 +488,13 @@ fn cmd_checkup: (args :vec[str]) {
             use dasu("  [OK]   [dependencies]: " + rt_i64_to_string(dep_count) + " configured")
         }
 
+        if do_fix {
+            use dasu("")
+            regenerate_owl_toml(fix_fields)
+        }
+
         if !toml_valid {
             set all_ok = false
-            if do_fix {
-                use dasu("")
-                regenerate_owl_toml()
-            }
         }
     } else {
         use dasu("  [FAIL] project: no owl.toml found")
@@ -485,7 +507,8 @@ fn cmd_checkup: (args :vec[str]) {
         use dasu("  [OK]   all checks passed")
     } else {
         if !do_fix {
-            use dasu("  [HINT] run 'checkup --fix' to repair owl.toml issues")
+            use dasu("  [HINT] run 'owl checkup --fix <field> [<field> ...]' to repair specific fields")
+            use dasu("         see 'owl checkup --help' or check the docs for available fields")
         }
     }
 }

@@ -1,5 +1,14 @@
 # Owl Changelog
 
+## [0.16.1] - 2026-06-29
+
+### Changed
+- `checkup --fix` now requires explicit field arguments:
+  `owl checkup --fix <field> [<field> ...]` instead of blanket-fixing all missing
+  fields. The developer controls exactly which fields get default values.
+- `checkup --fix` without field names shows a usage hint listing all available fields.
+- Hint message updated to reference the field-specific syntax.
+
 ## [0.16.0] - 2026-06-28
 
 ### Added

@@ -5,7 +5,7 @@
 - `owl checkup` validates all 11 fields: `name`, `version`, `description`,
   `entry`, `profile`, `opt-level`, `compiler`, `output`, `cache`, `sources`, `tests`
 - `owl checkup` counts `[dependencies]` entries
-- `owl checkup --fix` regenerates `owl.toml` preserving existing values
+- `owl checkup --fix <field>...` fixes only specified fields with defaults
 - `owl checkup` reports `[FAIL]` for missing required fields, `[WARN]` for
   optional fields or non-existent directories (created on next build)
 

@@ -32,7 +32,7 @@ owl run
 | `-N`  | `new <name>`  | Scaffold a new project |
 | `-C`  | `clean`       | Remove build artifacts and cache |
 |       | `checkup`     | Validate all owl.toml fields and environment |
-|       | `checkup --fix` | Regenerate owl.toml with defaults preserving existing values |
+|       | `checkup --fix <field>...` | Fix specific owl.toml fields, e.g. `checkup --fix name version` |
 
 ### Global
 
@@ -97,6 +97,15 @@ cache = "bin/.cache"
 - [Changelog](docs/changelog.md) — release history
 - [Technical notes](docs/technical.md) — architecture overview
 - [Roadmap](docs/roadmap.md) — planned features
+
+## Recent changes (v0.16.1)
+
+- **`checkup --fix` now requires explicit field arguments:**
+  `owl checkup --fix <field> [<field> ...]` — the developer specifies
+  exactly which fields to fix. `--fix` without field names shows a usage
+  hint. This replaces blanket regeneration for better control.
+- **Version bump:** `0.16.0` → `0.16.1`
+- **Removed `OWL_ROADMAP.md`** from repo (kept in root Arch context).
 
 ## Recent changes (v0.16.0)
 
