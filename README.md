@@ -24,6 +24,7 @@ owl run
 |       | `run`         | Compile and execute |
 |       | `check`       | Validate dependencies (path, version, integrity) |
 |       | `info`        | Project and environment information (live, no hardcoded values) |
+|       | `info --json` | Machine-readable JSON output (CI/IDE-friendly) |
 
 ### Project
 
@@ -97,6 +98,15 @@ cache = "bin/.cache"
 - [Changelog](docs/changelog.md) — release history
 - [Technical notes](docs/technical.md) — architecture overview
 - [Roadmap](docs/roadmap.md) — planned features
+
+## Recent changes (v0.16.2)
+
+- **`info --json`:** New machine-readable JSON output for CI/IDE
+  integration. Outputs project metadata, compiler info, LLVM version,
+  and dependency list as structured JSON.
+- **Known issues documented:** See `docs/roadmap.md` §9 for Mire/Kioto
+  compiler bugs and workarounds.
+- **Version bump:** `0.16.1` → `0.16.2`
 
 ## Recent changes (v0.16.1)
 

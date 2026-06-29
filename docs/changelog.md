@@ -1,5 +1,29 @@
 # Owl Changelog
 
+## [0.16.2] - 2026-06-29
+
+### Added
+- `info --json`: machine-readable JSON output for CI/IDE integration.
+  Outputs project metadata, compiler info, LLVM version, ABI, language,
+  and dependency list as structured JSON.
+- `json_quote(str)` helper: wraps a string in double quotes,
+  replacing `json::quoted()` from kioto (see Known Issues below).
+
+### Known Issues (Mire / Kioto)
+- `json::quoted()` from `kioto/ext/json` causes `free(): invalid pointer`
+  crash at runtime in all tested contexts. Use the custom `json_quote()`
+  helper instead.
+- Mire runtime bug: `\n` character in string concatenation inside loops
+  can trigger `free(): invalid pointer`. Avoid comparing/concatenating
+  substrings containing literal newlines in loop bodies.
+- `load kioto::json` on a separate line after `load kioto` produces
+  a parser syntax error (blank line confuses the parser). The json module
+  is already loaded through `kioto`'s own `mod.mire`.
+- Compiler error E0005 "Assignment to undefined variable" sometimes
+  fires without a precise source location when variables are declared
+  inside `if` branches and referenced later. Workaround: declare all
+  variables at the top of the function before any branches.
+
 ## [0.16.1] - 2026-06-29
 
 ### Changed
